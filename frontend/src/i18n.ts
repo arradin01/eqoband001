@@ -156,6 +156,9 @@ export const T: Record<Lang, Record<string, string>> = {
     beta_unsupported_hint: "Publish and generate an iOS or Android build to scan real Bluetooth devices",
     perm_denied: "Bluetooth permission denied",
     unknown_device: "Unknown device",
+    connect: "Connect",
+    connected_to: "Connected to",
+    services_found: "Services",
   },
   id: {
     live: "AKTIF",
@@ -299,6 +302,9 @@ export const T: Record<Lang, Record<string, string>> = {
     beta_unsupported_hint: "Publish dan generate build iOS atau Android untuk scan Bluetooth asli",
     perm_denied: "Izin Bluetooth ditolak",
     unknown_device: "Perangkat tidak dikenal",
+    connect: "Sambungkan",
+    connected_to: "Tersambung ke",
+    services_found: "Servis",
   },
 };
 

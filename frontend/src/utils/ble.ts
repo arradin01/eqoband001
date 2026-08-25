@@ -1,10 +1,5 @@
 // Safe BLE wrapper — only activates on a native dev/prod build.
 // On web + Expo Go it exposes a stub that reports "not supported".
-//
-// Usage:
-//   import { ble } from "@/src/utils/ble";
-//   if (ble.supported) { ... }
-//   const stop = ble.scan(onDeviceFound); // returns stop() to cancel scan
 
 import Constants from "expo-constants";
 import { PermissionsAndroid, Platform } from "react-native";
@@ -15,6 +10,12 @@ export type ScannedDevice = {
   rssi: number | null;
 };
 
+export type ConnectedInfo = {
+  id: string;
+  name: string | null;
+  services: string[];
+};
+
 type Unsub = () => void;
 
 type BleAPI = {
@@ -22,6 +23,8 @@ type BleAPI = {
   reason?: string;
   ensurePermissions: () => Promise<boolean>;
   scan: (onDevice: (d: ScannedDevice) => void, onError?: (e: string) => void) => Unsub;
+  connect: (deviceId: string) => Promise<ConnectedInfo>;
+  disconnect: (deviceId: string) => Promise<void>;
 };
 
 const isExpoGo = Constants.executionEnvironment === "storeClient";
@@ -30,8 +33,6 @@ const isWeb = Platform.OS === "web";
 async function ensureAndroidPermissions(): Promise<boolean> {
   if (Platform.OS !== "android") return true;
   try {
-    // Android 12+ (API 31+) needs BLUETOOTH_SCAN & BLUETOOTH_CONNECT.
-    // Older Android needs ACCESS_FINE_LOCATION for scanning.
     const wanted = [
       PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
       PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
@@ -50,6 +51,10 @@ function makeStub(reason: string): BleAPI {
     reason,
     ensurePermissions: async () => false,
     scan: () => () => {},
+    connect: async () => {
+      throw new Error(reason);
+    },
+    disconnect: async () => {},
   };
 }
 
@@ -98,6 +103,32 @@ function makeReal(): BleAPI {
           // ignore
         }
       };
+    },
+    async connect(deviceId) {
+      const m = getManager();
+      // Stop scanning before attempting connect (Android requirement).
+      try { m.stopDeviceScan(); } catch {}
+      const dev = await m.connectToDevice(deviceId, { timeout: 15000 });
+      await dev.discoverAllServicesAndCharacteristics();
+      let services: any[] = [];
+      try {
+        services = await dev.services();
+      } catch {
+        services = [];
+      }
+      return {
+        id: dev.id,
+        name: dev.name ?? dev.localName ?? null,
+        services: services.map((s: any) => s.uuid),
+      };
+    },
+    async disconnect(deviceId) {
+      const m = getManager();
+      try {
+        await m.cancelDeviceConnection(deviceId);
+      } catch {
+        // ignore
+      }
     },
   };
 }

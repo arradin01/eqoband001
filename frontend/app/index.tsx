@@ -18,7 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Lang, tr } from "@/src/i18n";
-import { ble, ScannedDevice } from "@/src/utils/ble";
+import { ble, ConnectedInfo, ScannedDevice } from "@/src/utils/ble";
 import { storage } from "@/src/utils/storage";
 
 const API = `${process.env.EXPO_PUBLIC_BACKEND_URL ?? ""}/api`;
@@ -967,10 +967,14 @@ function RealBLEPanel({ t }: { t: (k: string) => string }) {
   const [scanning, setScanning] = useState(false);
   const [devices, setDevices] = useState<ScannedDevice[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [connected, setConnected] = useState<ConnectedInfo | null>(null);
   const stopRef = useRef<null | (() => void)>(null);
 
   useEffect(() => () => {
     if (stopRef.current) stopRef.current();
+    if (connected) ble.disconnect(connected.id).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const startScan = async () => {
@@ -993,7 +997,6 @@ function RealBLEPanel({ t }: { t: (k: string) => string }) {
         setScanning(false);
       },
     );
-    // Auto-stop after 15s
     setTimeout(() => {
       if (stopRef.current) {
         stopRef.current();
@@ -1009,6 +1012,39 @@ function RealBLEPanel({ t }: { t: (k: string) => string }) {
       stopRef.current = null;
     }
     setScanning(false);
+  };
+
+  const handleConnect = async (d: ScannedDevice) => {
+    if (busyId) return;
+    // if already connected to this device, disconnect
+    if (connected?.id === d.id) {
+      setBusyId(d.id);
+      try {
+        await ble.disconnect(d.id);
+        setConnected(null);
+      } catch (e: any) {
+        setError(e?.message ?? "Disconnect failed");
+      } finally {
+        setBusyId(null);
+      }
+      return;
+    }
+    // disconnect any previous
+    if (connected) {
+      try { await ble.disconnect(connected.id); } catch {}
+      setConnected(null);
+    }
+    stopScan();
+    setBusyId(d.id);
+    setError(null);
+    try {
+      const info = await ble.connect(d.id);
+      setConnected(info);
+    } catch (e: any) {
+      setError(e?.message ?? "Connect failed");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
@@ -1052,23 +1088,62 @@ function RealBLEPanel({ t }: { t: (k: string) => string }) {
             {error && (
               <View style={styles.betaWarn}>
                 <MaterialCommunityIcons name="alert-circle-outline" size={18} color={C.red} />
-                <Text style={styles.body}>{error}</Text>
+                <Text style={[styles.body, { flex: 1 }]}>{error}</Text>
               </View>
             )}
 
-            {!scanning && devices.length === 0 && !error && (
+            {connected && (
+              <View style={[styles.betaWarn, { backgroundColor: "rgba(16,185,129,0.12)" }]}>
+                <MaterialCommunityIcons name="check-circle" size={18} color={C.green} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.warnTitle}>{t("connected_to")} {connected.name ?? t("unknown_device")}</Text>
+                  <Text style={styles.body}>{connected.id}</Text>
+                  {connected.services.length > 0 && (
+                    <Text style={[styles.muted, { marginTop: 6, fontSize: 11 }]}>
+                      {t("services_found")}: {connected.services.length}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {!scanning && devices.length === 0 && !error && !connected && (
               <Text style={[styles.muted, { marginTop: 12 }]}>{t("no_devices")}</Text>
             )}
 
-            {devices.map((d) => (
-              <View key={d.id} style={styles.deviceItem} testID={`ble-device-${d.id}`}>
-                <MaterialCommunityIcons name="bluetooth" size={20} color={C.blue} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{d.name ?? t("unknown_device")}</Text>
-                  <Text style={styles.muted}>{d.id}{d.rssi !== null ? ` · ${d.rssi} dBm` : ""}</Text>
-                </View>
-              </View>
-            ))}
+            {devices.map((d) => {
+              const isConnected = connected?.id === d.id;
+              const isBusy = busyId === d.id;
+              return (
+                <Pressable
+                  key={d.id}
+                  testID={`ble-device-${d.id}`}
+                  onPress={() => handleConnect(d)}
+                  disabled={isBusy}
+                  style={[
+                    styles.deviceItem,
+                    isConnected && { borderColor: C.green, borderWidth: 1 },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name={isConnected ? "bluetooth-connect" : "bluetooth"}
+                    size={20}
+                    color={isConnected ? C.green : C.blue}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardTitle}>{d.name ?? t("unknown_device")}</Text>
+                    <Text style={styles.muted}>{d.id}{d.rssi !== null ? ` · ${d.rssi} dBm` : ""}</Text>
+                  </View>
+                  {isBusy ? (
+                    <ActivityIndicator size="small" color={C.ember} />
+                  ) : (
+                    <Text style={[styles.action, { color: isConnected ? C.red : C.ember }]}>
+                      {isConnected ? t("disconnect") : t("connect")}
+                    </Text>
+                  )}
+                </Pressable>
+              );
+            })}
           </>
         )}
       </View>

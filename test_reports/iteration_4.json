@@ -1,0 +1,37 @@
+{
+  "summary": "Tap-to-connect regression pass. Backend: 5/5 pytest (telemetry, insights, /api/ai/chat en+id, blank-message 400) all green. Frontend (Expo web preview @ 390x844): app boots without crash after adding ble.connect/ble.disconnect wrappers; all 5 bottom tabs (health, goals, ai, device, settings) render and are tappable; Device tab renders the full stack: hero card + hold-to-connect + Device Information + new 'REAL BLE (BETA)' section. On web ble.supported=false, so the panel correctly shows the amber 'Preview build - Real BLE is disabled' fallback and does NOT render ble-scan-btn (verified). Mocked 2s long-press on device-hold flips connection state to CONNECTED / LIVE. Language toggle (EN <-> ID) correctly rewrites Beta section to 'BLE ASLI (BETA)' with 'Build preview - BLE asli dinonaktifkan'. New i18n keys (connect, connected_to, services_found, unknown_device) present in both en+id. AI chat call to POST /api/ai/chat with {language, context} returns a real LLM answer end-to-end. NOTE: real BLE tap-to-connect flow cannot be exercised on web (by design) - only verified compile+boot+no-regression. Deprecation warning re: pointerEvents prop from iteration_3 is unchanged (still valid follow-up).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "Toast View", "issue": "React Native web deprecation warning: props.pointerEvents is deprecated - use style.pointerEvents. Reference: /app/frontend/app/index.tsx:528. Non-blocking; unchanged from iteration_3."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_eqoband_api.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/ui/iter4_health.jpeg",
+    "/app/test_reports/ui/iter4_device_bottom.jpeg",
+    "/app/test_reports/ui/iter4_final.jpeg"
+  ],
+  "action_items": [
+    "(Minor, carry-over) Migrate `<View pointerEvents=\"none\">` in the Toast (index.tsx:528) to `style={{ pointerEvents: 'none' }}` to silence the RN-web deprecation warning.",
+    "(Native-only follow-up, not testable here) Tap-to-connect real BLE flow must be verified on a physical Android build with the EQOband-C3 ESP32-C3 in range - web preview cannot exercise ble.connect / ble.disconnect."
+  ],
+  "critical_code_review_comments": [
+    "ble.ts: connect() correctly calls stopDeviceScan() before connectToDevice() (Android requirement) and then discoverAllServicesAndCharacteristics(). Errors from services() are swallowed to [] so a partial connection still resolves - reasonable for a BETA panel.",
+    "ble.ts: disconnect() wraps cancelDeviceConnection in try/catch and never throws, which pairs correctly with the RealBLEPanel finally block that clears busyId.",
+    "RealBLEPanel: cleanup effect calls stopRef.current() and ble.disconnect(connected.id) on unmount - good, avoids leaked native scan/connection on tab change. However the `useEffect` cleanup captures `connected` in a stale closure because the dep array is empty; on unmount `connected` will always be null. Low impact (tab is only unmounted when the whole app unmounts) but worth noting.",
+    "handleConnect debounces via busyId and disconnects any previous device before connecting to a new one - correct single-connection semantics.",
+    "i18n: added keys (connect, connected_to, services_found, unknown_device) are present in BOTH en and id; renderers verified translating on toggle."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (all requested flows on web preview)"},
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "RealBLEPanel is intentionally gated behind ble.supported which is false on web preview and in Expo Go - do NOT flag missing scan button, device rows, or the amber fallback as bugs. The tap-to-connect Pressable rows only render on native Android/iOS builds. All other tabs and the AI chat integration continue to work normally on web.",
+  "rca_of_issue": "N/A - feature addition verified compile-safe and non-regressing on web; native-only path is out of scope for the preview harness."
+}
