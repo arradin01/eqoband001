@@ -967,7 +967,7 @@ function SettingsScreen({
     <>
       <View style={styles.profile}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>A</Text>
+          <Text style={styles.avatarText}>S</Text>
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.cardTitle}>{t("profile")}</Text>

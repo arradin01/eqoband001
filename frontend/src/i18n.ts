@@ -105,7 +105,7 @@ export const T: Record<Lang, Record<string, string>> = {
     tracking_active: "Tracking active",
     tracking_idle: "Tracking idle",
     // settings
-    profile: "Alex Morgan",
+    profile: "Sulthan Ansel Hensem",
     profile_sub: "Demo profile - Active goals",
     prefs: "PREFERENCES",
     language_lbl: "Language",
@@ -239,7 +239,7 @@ export const T: Record<Lang, Record<string, string>> = {
     stop_tracking: "Hentikan tracking",
     tracking_active: "Tracking aktif",
     tracking_idle: "Tracking mati",
-    profile: "Alex Morgan",
+    profile: "Sulthan Ansel Hensem",
     profile_sub: "Profil demo - Target aktif",
     prefs: "PREFERENSI",
     language_lbl: "Bahasa",
