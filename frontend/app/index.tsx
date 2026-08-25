@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Lang, tr } from "@/src/i18n";
+import { ble, ScannedDevice } from "@/src/utils/ble";
 import { storage } from "@/src/utils/storage";
 
 const API = `${process.env.EXPO_PUBLIC_BACKEND_URL ?? ""}/api`;
@@ -524,7 +525,7 @@ export default function Index() {
 
       {/* Toast */}
       {toast && (
-        <View style={styles.toast} pointerEvents="none" testID="toast">
+        <View style={[styles.toast, { pointerEvents: "none" }]} testID="toast">
           <Text style={styles.toastText}>{toast}</Text>
         </View>
       )}
@@ -955,6 +956,122 @@ function DeviceScreen({
         <Text style={styles.body}>0000FFE1-0000-1000-8000-00805F9B34FB</Text>
         <Text style={[styles.muted, { marginTop: 14 }]}>{t("ble_service")}</Text>
       </View>
+
+      <RealBLEPanel t={t} />
+    </>
+  );
+}
+
+// ---------- Real BLE Panel ----------
+function RealBLEPanel({ t }: { t: (k: string) => string }) {
+  const [scanning, setScanning] = useState(false);
+  const [devices, setDevices] = useState<ScannedDevice[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const stopRef = useRef<null | (() => void)>(null);
+
+  useEffect(() => () => {
+    if (stopRef.current) stopRef.current();
+  }, []);
+
+  const startScan = async () => {
+    setError(null);
+    setDevices([]);
+    if (!ble.supported) {
+      setError(ble.reason ?? t("beta_unsupported"));
+      return;
+    }
+    const ok = await ble.ensurePermissions();
+    if (!ok) {
+      setError(t("perm_denied"));
+      return;
+    }
+    setScanning(true);
+    stopRef.current = ble.scan(
+      (d) => setDevices((list) => [...list, d]),
+      (msg) => {
+        setError(msg);
+        setScanning(false);
+      },
+    );
+    // Auto-stop after 15s
+    setTimeout(() => {
+      if (stopRef.current) {
+        stopRef.current();
+        stopRef.current = null;
+      }
+      setScanning(false);
+    }, 15000);
+  };
+
+  const stopScan = () => {
+    if (stopRef.current) {
+      stopRef.current();
+      stopRef.current = null;
+    }
+    setScanning(false);
+  };
+
+  return (
+    <>
+      <Section title={t("beta_ble")} />
+      <View style={styles.infoBox}>
+        <Text style={styles.muted}>{t("beta_ble_desc")}</Text>
+
+        {!ble.supported ? (
+          <View style={styles.betaWarn}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color={C.amber} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.warnTitle}>{t("beta_unsupported")}</Text>
+              <Text style={styles.body}>{ble.reason ?? t("beta_unsupported_hint")}</Text>
+            </View>
+          </View>
+        ) : (
+          <>
+            <Pressable
+              testID="ble-scan-btn"
+              onPress={scanning ? stopScan : startScan}
+              style={[styles.scanBtn, { backgroundColor: scanning ? C.red : C.ember }]}
+            >
+              <MaterialCommunityIcons
+                name={scanning ? "stop-circle-outline" : "radar"}
+                size={18}
+                color={C.text}
+              />
+              <Text style={styles.scanBtnTxt}>
+                {scanning ? t("stop_scan") : t("scan")}
+              </Text>
+            </Pressable>
+
+            {scanning && (
+              <View style={styles.scanRow}>
+                <ActivityIndicator size="small" color={C.ember} />
+                <Text style={styles.muted}>{t("scanning")}</Text>
+              </View>
+            )}
+
+            {error && (
+              <View style={styles.betaWarn}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={18} color={C.red} />
+                <Text style={styles.body}>{error}</Text>
+              </View>
+            )}
+
+            {!scanning && devices.length === 0 && !error && (
+              <Text style={[styles.muted, { marginTop: 12 }]}>{t("no_devices")}</Text>
+            )}
+
+            {devices.map((d) => (
+              <View key={d.id} style={styles.deviceItem} testID={`ble-device-${d.id}`}>
+                <MaterialCommunityIcons name="bluetooth" size={20} color={C.blue} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>{d.name ?? t("unknown_device")}</Text>
+                  <Text style={styles.muted}>{d.id}{d.rssi !== null ? ` · ${d.rssi} dBm` : ""}</Text>
+                </View>
+              </View>
+            ))}
+          </>
+        )}
+      </View>
     </>
   );
 }
@@ -1330,4 +1447,12 @@ const styles = StyleSheet.create({
   modalCard: { width: "100%", backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 20, padding: 24 },
   modalInput: { backgroundColor: C.raised, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: C.text, fontSize: 15, marginTop: 6, marginBottom: 12 },
   modalActions: { flexDirection: "row", gap: 12, marginTop: 12 },
+
+  // Real BLE panel
+  betaWarn: { flexDirection: "row", gap: 10, backgroundColor: C.raised, borderRadius: 10, padding: 12, marginTop: 12, alignItems: "flex-start" },
+  warnTitle: { fontSize: 13, color: C.text, fontWeight: "700", marginBottom: 2 },
+  scanBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 12, marginTop: 14 },
+  scanBtnTxt: { color: C.text, fontWeight: "700", fontSize: 14, letterSpacing: 1 },
+  scanRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
+  deviceItem: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: C.raised, borderRadius: 10, padding: 12, marginTop: 10 },
 });

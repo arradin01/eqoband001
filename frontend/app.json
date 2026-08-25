@@ -11,13 +11,19 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "Connect your EQOband for health data.",
+        "NSBluetoothAlwaysUsageDescription": "Scan for and connect to your EQOband over Bluetooth.",
+        "NSBluetoothPeripheralUsageDescription": "Connect to your EQOband to sync health data.",
         "NSMicrophoneUsageDescription": "Ask EQOAI hands-free with your voice."
       },
       "bundleIdentifier": "com.emergent.eqoaihealthhub.j1yfnw"
     },
     "android": {
-      "permissions": ["BLUETOOTH_SCAN", "BLUETOOTH_CONNECT", "RECORD_AUDIO"],
+      "permissions": [
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "ACCESS_FINE_LOCATION",
+        "RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
@@ -40,7 +46,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#000000"
         }
-      ]
+      ],
+      "react-native-ble-plx"
     ],
     "experiments": {
       "typedRoutes": true

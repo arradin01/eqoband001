@@ -39,3 +39,19 @@ def test_ai_chat_rejects_blank_message():
         f"{BASE_URL}/api/ai/chat", json={"message": "   "}, timeout=15
     )
     assert response.status_code == 400
+    payload = response.json()
+    assert "detail" in payload
+
+
+# Verify /api/ai/chat accepts new `language` field (en + id)
+def test_ai_chat_accepts_language_param():
+    for lang in ("en", "id"):
+        response = requests.post(
+            f"{BASE_URL}/api/ai/chat",
+            json={"message": "how am i doing", "language": lang, "context": {"connected": True, "heart_rate": 72, "steps": 5000, "step_goal": 10000, "tracking": False, "battery": 80}},
+            timeout=30,
+        )
+        assert response.status_code == 200, f"lang={lang} failed"
+        payload = response.json()
+        assert isinstance(payload["answer"], str) and payload["answer"]
+        assert payload["source"] in {"baseline", "eqoai"}

@@ -145,6 +145,17 @@ export const T: Record<Lang, Record<string, string>> = {
     steps_daily: "Daily steps",
     active_minutes: "Active minutes",
     calories_daily: "Calories",
+    // Real BLE
+    beta_ble: "REAL BLE (BETA)",
+    beta_ble_desc: "Scan for your ESP32-C3 over real Bluetooth",
+    scan: "Scan devices",
+    scanning: "Scanning...",
+    stop_scan: "Stop scan",
+    no_devices: "No devices found yet",
+    beta_unsupported: "Preview build - Real BLE is disabled",
+    beta_unsupported_hint: "Publish and generate an iOS or Android build to scan real Bluetooth devices",
+    perm_denied: "Bluetooth permission denied",
+    unknown_device: "Unknown device",
   },
   id: {
     live: "AKTIF",
@@ -277,6 +288,17 @@ export const T: Record<Lang, Record<string, string>> = {
     steps_daily: "Langkah harian",
     active_minutes: "Menit aktif",
     calories_daily: "Kalori",
+    // Real BLE
+    beta_ble: "BLE ASLI (BETA)",
+    beta_ble_desc: "Cari ESP32-C3 kamu lewat Bluetooth asli",
+    scan: "Scan perangkat",
+    scanning: "Mencari...",
+    stop_scan: "Hentikan scan",
+    no_devices: "Belum ada perangkat ditemukan",
+    beta_unsupported: "Build preview - BLE asli dinonaktifkan",
+    beta_unsupported_hint: "Publish dan generate build iOS atau Android untuk scan Bluetooth asli",
+    perm_denied: "Izin Bluetooth ditolak",
+    unknown_device: "Perangkat tidak dikenal",
   },
 };
 
