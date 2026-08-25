@@ -1,0 +1,150 @@
+{
+  "app_name": "EQOband",
+  "personality": "7 Dark-First Utility DARK",
+  "personality_one_liner": "Command-center health tech with a deep obsidian canvas, high-contrast ember accent, and glanceable biometric telemetry.",
+  "color": {
+    "surface": "#121316",
+    "onSurface": "#F4F5F7",
+    "surfaceSecondary": "#1A1C23",
+    "onSurfaceSecondary": "#F4F5F7",
+    "surfaceTertiary": "#232630",
+    "onSurfaceTertiary": "#9BA1B0",
+    "surfaceInverse": "#FFFFFF",
+    "onSurfaceInverse": "#121316",
+    "brand": "#FF5722",
+    "brandPrimary": "#FF5722",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#E64A19",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "rgba(255, 87, 34, 0.15)",
+    "onBrandTertiary": "#FF5722",
+    "success": "#10B981",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F59E0B",
+    "onWarning": "#121316",
+    "error": "#EF4444",
+    "onError": "#FFFFFF",
+    "info": "#3B82F6",
+    "onInfo": "#FFFFFF",
+    "border": "#2A2E3D",
+    "borderStrong": "#FF5722",
+    "divider": "#1F232F"
+  },
+  "typography": {
+    "displayFontFamily": "BarlowCondensed_600SemiBold",
+    "textFontFamily": "Satoshi-Regular",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous vertical rhythm with compact modular spacing and 56pt touch targets.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "MaterialCommunityIcons",
+  "glassmorphism": {
+    "enabled": false,
+    "do's": [
+      "Use solid obsidian and graphite surfaces with high-contrast ember accents for maximum outdoor legibility.",
+      "Use crisp 1px borders (#2A2E3D) to separate telemetry cards."
+    ],
+    "dont's": [
+      "Avoid heavy blur and translucent glass in dense health command centers where glanceability is critical."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Dashboard",
+      "purpose": "Real-time health telemetry, live heart rate pulse, daily steps, activity summary, and ESP32-C3 BLE connection status.",
+      "states": {
+        "loading": "Centered pulse indicator with connecting status to EQOband...",
+        "empty": "No EQOband connected. Tap scan to pair your ESP32-C3 wristband.",
+        "error": "Bluetooth connection lost. Tap to retry reconnecting to EQOband."
+      },
+      "layout": "Sticky status header at top with battery and BLE indicator, real-time live heart rate card with pulsating waveform, daily step progress ring/bar, activity summary breakdown, and quick action cards."
+    },
+    {
+      "name": "Weekly Goals",
+      "purpose": "Comprehensive tracking of weekly step goals, activity milestones, and historical achievements.",
+      "states": {
+        "loading": "Loading weekly telemetry and streak data...",
+        "empty": "No weekly activity records found yet. Complete workouts to populate trends.",
+        "error": "Failed to load weekly metrics. Tap to retry."
+      },
+      "layout": "Summary banner at top with total weekly calories and step average, 7-day bar breakdown chart, milestone achievement list, and streak tracker."
+    },
+    {
+      "name": "EQOAI",
+      "purpose": "AI health assistant with text chat, rule-based health insights, LLM responses, and voice interaction.",
+      "states": {
+        "loading": "EQOAI is analyzing your biometric data streams...",
+        "empty": "Ask EQOAI anything about your heart rate, sleep recovery, or activity goals.",
+        "error": "AI response timeout. Check connection and tap to retry."
+      },
+      "layout": "Header with EQOAI status and voice assistant toggle, scrollable chat message history with rich insights, quick prompt pills at bottom, and persistent voice microphone trigger bar."
+    },
+    {
+      "name": "Device & BLE",
+      "purpose": "Manage ESP32-C3 BLE pairing, view battery percentage, signal strength (RSSI), and connection controls.",
+      "states": {
+        "loading": "Scanning for nearby EQOband devices...",
+        "empty": "No nearby EQOband found. Ensure your wristband is powered on.",
+        "error": "BLE scanning error. Enable Bluetooth and retry."
+      },
+      "layout": "Connected device banner with real-time battery gauge, RSSI indicator, scan for devices list, firmware version, and disconnect/reconnect controls."
+    },
+    {
+      "name": "Settings",
+      "purpose": "Configure user profile, notification preferences, goal targets, and app preferences.",
+      "states": {
+        "loading": "Loading settings...",
+        "empty": "No settings available.",
+        "error": "Failed to save settings. Tap to retry."
+      },
+      "layout": "Grouped list rows with icon containers, toggle switches for notifications and haptics, demo profile info card, and app version metadata."
+    }
+  ],
+  "images": {
+    "band_hero": {
+      "url": "https://images.unsplash.com/photo-1762768722543-289c49f0050a?auto=format&fit=crop&w=800&q=80",
+      "dark": "https://images.unsplash.com/photo-1762768722543-289c49f0050a?auto=format&fit=crop&w=800&q=80",
+      "alt": "EQOband smart wristband health tech"
+    },
+    "ai_avatar": {
+      "url": "https://images.unsplash.com/photo-1782397814045-3e1c9d1edc74?auto=format&fit=crop&w=400&q=80",
+      "dark": "https://images.unsplash.com/photo-1782397814045-3e1c9d1edc74?auto=format&fit=crop&w=400&q=80",
+      "alt": "EQOAI neural assistant avatar"
+    }
+  },
+  "instructions_to_main_agent": "Ensure the app uses Personality 7 (Dark-First Utility DARK) with obsidian surfaces and warm ember accent (#FF5722). Implement real BLE connection flow mockup with ESP32-C3 service UUIDs, live heart rate pulse animation, EQOAI text and voice chat with audio simulation, weekly goals tracking, and demo profile. Follow all safety and native layout rules."
+}
