@@ -1,8 +1,10 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import re
+import hashlib
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -10,10 +12,14 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.openai import OpenAITextToSpeech
+import emoji as emoji_lib
 
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+AUDIO_CACHE = ROOT_DIR / "audio_cache"
+AUDIO_CACHE.mkdir(exist_ok=True)
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -33,7 +39,7 @@ class StatusCheckCreate(BaseModel):
 
 @api_router.get("/")
 async def root():
-    return {"message": "EQOband API ready", "version": "2.0"}
+    return {"message": "EQOband API ready", "version": "3.0"}
 
 DEMO_TELEMETRY = {
     "heart_rate": 72,
@@ -128,6 +134,86 @@ async def ai_chat(request: ChatRequest):
         logger.warning("EQOAI fallback: %s", exc)
         fallback = "I'm having trouble reaching my knowledge base. Try again in a moment." if language == "en" else "Saya kesulitan mengakses pengetahuan saya. Coba lagi sebentar."
         return {"answer": fallback, "source": "baseline"}
+
+
+# ---------------- TTS ----------------
+def clean_for_tts(text: str) -> str:
+    text = emoji_lib.replace_emoji(text, replace="")
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"`{1,3}[^`]*`{1,3}", "", text)
+    text = re.sub(r"[*_#>~|]", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def tts_cache_key(text: str, voice: str, speed: float, model: str, fmt: str) -> str:
+    return hashlib.sha256(f"{text}|{voice}|{speed}|{model}|{fmt}".encode()).hexdigest()
+
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: Optional[str] = "nova"
+    speed: Optional[float] = 1.0
+    model: Optional[str] = "tts-1"
+    format: Optional[str] = "mp3"
+
+
+@api_router.post("/tts")
+async def tts_generate(request: TTSRequest):
+    """Generate TTS audio, cache it, and return a URL to fetch it."""
+    text = clean_for_tts(request.text or "")
+    if not text:
+        raise HTTPException(status_code=400, detail="Text is required")
+    # OpenAI TTS max is 4096 chars — trim to avoid failures
+    text = text[:4000]
+
+    voice = request.voice or "nova"
+    speed = float(request.speed or 1.0)
+    model = request.model or "tts-1"
+    fmt = request.format or "mp3"
+    key = tts_cache_key(text, voice, speed, model, fmt)
+    out_path = AUDIO_CACHE / f"{key}.{fmt}"
+
+    if not out_path.exists():
+        api_key = os.getenv("EMERGENT_LLM_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="TTS unavailable: missing key")
+        tts = OpenAITextToSpeech(api_key=api_key)
+        try:
+            audio = await tts.generate_speech(
+                text=text, model=model, voice=voice, speed=speed, response_format=fmt,
+            )
+        except Exception as exc:
+            logger.warning("TTS generation failed: %s", exc)
+            raise HTTPException(status_code=502, detail="TTS generation failed") from exc
+        out_path.write_bytes(audio)
+
+    return {"url": f"/api/tts/{key}.{fmt}", "cached": out_path.exists()}
+
+
+MEDIA_TYPES = {
+    "mp3": "audio/mpeg",
+    "wav": "audio/wav",
+    "opus": "audio/opus",
+    "aac": "audio/aac",
+    "flac": "audio/flac",
+    "pcm": "audio/L16",
+}
+
+
+@api_router.get("/tts/{key}.{ext}")
+async def get_tts_audio(key: str, ext: str):
+    if ext not in MEDIA_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported format")
+    path = AUDIO_CACHE / f"{key}.{ext}"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Audio not found")
+    return Response(
+        content=path.read_bytes(),
+        media_type=MEDIA_TYPES[ext],
+        headers={"Cache-Control": "public, max-age=31536000"},
+    )
+
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):

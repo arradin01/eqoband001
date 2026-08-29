@@ -1,20 +1,23 @@
 // Safe BLE wrapper — only activates on a native dev/prod build.
-// On web + Expo Go it exposes a stub that reports "not supported".
+// EQOband custom Service + Characteristics (must match ESP32-C3 firmware):
+//   Service UUID:         6e400001-b5a3-f393-e0a9-e50e24dcca9e
+//   HR Notify Char:       6e400002-b5a3-f393-e0a9-e50e24dcca9e  (uint8 BPM)
+//   Battery Read Char:    6e400003-b5a3-f393-e0a9-e50e24dcca9e  (uint8 percent)
+//
+// On the phone side we subscribe to the HR characteristic; on the ESP side you
+// notify() a single byte (BPM) whenever your MAX30102 driver has a new reading.
 
 import Constants from "expo-constants";
+import { Buffer } from "buffer";
 import { PermissionsAndroid, Platform } from "react-native";
 
-export type ScannedDevice = {
-  id: string;
-  name: string | null;
-  rssi: number | null;
-};
+export const EQOBAND_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+export const EQOBAND_HR_CHAR_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+export const EQOBAND_BAT_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
-export type ConnectedInfo = {
-  id: string;
-  name: string | null;
-  services: string[];
-};
+export type ScannedDevice = { id: string; name: string | null; rssi: number | null };
+export type ConnectedInfo = { id: string; name: string | null; services: string[]; hasEqoService: boolean };
+export type HRStreamUnsub = () => void;
 
 type Unsub = () => void;
 
@@ -25,6 +28,12 @@ type BleAPI = {
   scan: (onDevice: (d: ScannedDevice) => void, onError?: (e: string) => void) => Unsub;
   connect: (deviceId: string) => Promise<ConnectedInfo>;
   disconnect: (deviceId: string) => Promise<void>;
+  streamHR: (
+    deviceId: string,
+    onBpm: (bpm: number) => void,
+    onError?: (e: string) => void,
+  ) => Promise<HRStreamUnsub>;
+  readBattery: (deviceId: string) => Promise<number | null>;
 };
 
 const isExpoGo = Constants.executionEnvironment === "storeClient";
@@ -51,10 +60,10 @@ function makeStub(reason: string): BleAPI {
     reason,
     ensurePermissions: async () => false,
     scan: () => () => {},
-    connect: async () => {
-      throw new Error(reason);
-    },
+    connect: async () => { throw new Error(reason); },
     disconnect: async () => {},
+    streamHR: async () => () => {},
+    readBattery: async () => null,
   };
 }
 
@@ -73,6 +82,10 @@ function makeReal(): BleAPI {
     return manager;
   };
 
+  const b64ToBytes = (b64: string): Uint8Array => {
+    try { return Uint8Array.from(Buffer.from(b64, "base64")); } catch { return new Uint8Array(); }
+  };
+
   return {
     supported: true,
     ensurePermissions: ensureAndroidPermissions,
@@ -81,10 +94,7 @@ function makeReal(): BleAPI {
       const seen = new Set<string>();
       try {
         m.startDeviceScan(null, null, (err: any, device: any) => {
-          if (err) {
-            onError?.(err?.message ?? String(err));
-            return;
-          }
+          if (err) { onError?.(err?.message ?? String(err)); return; }
           if (!device || seen.has(device.id)) return;
           seen.add(device.id);
           onDevice({
@@ -93,41 +103,61 @@ function makeReal(): BleAPI {
             rssi: typeof device.rssi === "number" ? device.rssi : null,
           });
         });
-      } catch (e: any) {
-        onError?.(e?.message ?? "Scan failed");
-      }
-      return () => {
-        try {
-          m.stopDeviceScan();
-        } catch {
-          // ignore
-        }
-      };
+      } catch (e: any) { onError?.(e?.message ?? "Scan failed"); }
+      return () => { try { m.stopDeviceScan(); } catch {} };
     },
     async connect(deviceId) {
       const m = getManager();
-      // Stop scanning before attempting connect (Android requirement).
       try { m.stopDeviceScan(); } catch {}
       const dev = await m.connectToDevice(deviceId, { timeout: 15000 });
       await dev.discoverAllServicesAndCharacteristics();
       let services: any[] = [];
-      try {
-        services = await dev.services();
-      } catch {
-        services = [];
-      }
+      try { services = await dev.services(); } catch { services = []; }
+      const uuids = services.map((s: any) => (s.uuid || "").toLowerCase());
       return {
         id: dev.id,
         name: dev.name ?? dev.localName ?? null,
-        services: services.map((s: any) => s.uuid),
+        services: uuids,
+        hasEqoService: uuids.includes(EQOBAND_SERVICE_UUID.toLowerCase()),
       };
     },
     async disconnect(deviceId) {
       const m = getManager();
+      try { await m.cancelDeviceConnection(deviceId); } catch {}
+    },
+    async streamHR(deviceId, onBpm, onError) {
+      const m = getManager();
       try {
-        await m.cancelDeviceConnection(deviceId);
+        const sub = m.monitorCharacteristicForDevice(
+          deviceId,
+          EQOBAND_SERVICE_UUID,
+          EQOBAND_HR_CHAR_UUID,
+          (err: any, ch: any) => {
+            if (err) { onError?.(err?.message ?? String(err)); return; }
+            if (!ch?.value) return;
+            const bytes = b64ToBytes(ch.value);
+            if (bytes.length > 0) onBpm(bytes[0]);
+          },
+        );
+        return () => { try { sub.remove(); } catch {} };
+      } catch (e: any) {
+        onError?.(e?.message ?? "HR stream failed");
+        return () => {};
+      }
+    },
+    async readBattery(deviceId) {
+      const m = getManager();
+      try {
+        const ch = await m.readCharacteristicForDevice(
+          deviceId,
+          EQOBAND_SERVICE_UUID,
+          EQOBAND_BAT_CHAR_UUID,
+        );
+        if (!ch?.value) return null;
+        const bytes = b64ToBytes(ch.value);
+        return bytes.length > 0 ? bytes[0] : null;
       } catch {
-        // ignore
+        return null;
       }
     },
   };

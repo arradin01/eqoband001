@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Network from "expo-network";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -9,7 +10,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Switch,
   Text,
   TextInput,
@@ -18,25 +18,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Lang, tr } from "@/src/i18n";
-import { ble, ConnectedInfo, ScannedDevice } from "@/src/utils/ble";
+import { Theme, ThemeProvider, useAppTheme } from "@/src/theme";
+import { ble, ConnectedInfo, EQOBAND_SERVICE_UUID, HRStreamUnsub, ScannedDevice } from "@/src/utils/ble";
 import { storage } from "@/src/utils/storage";
+import { speak, stopSpeaking } from "@/src/utils/tts";
 
 const API = `${process.env.EXPO_PUBLIC_BACKEND_URL ?? ""}/api`;
-
-const C = {
-  bg: "#121316",
-  card: "#1A1C23",
-  raised: "#232630",
-  text: "#F4F5F7",
-  muted: "#9BA1B0",
-  ember: "#FF5722",
-  green: "#10B981",
-  blue: "#3B82F6",
-  purple: "#7C3AED",
-  red: "#EF4444",
-  border: "#2A2E3D",
-  amber: "#F59E0B",
-};
 
 type Tab = "health" | "goals" | "ai" | "device" | "settings";
 type Msg = { id: string; from: "me" | "ai" | "sys"; text: string; time: string };
@@ -51,7 +38,7 @@ const K = {
   calGoal: "eqo:calGoal",
 };
 
-const Icon = ({ name, size = 22, color = C.muted }: { name: string; size?: number; color?: string }) => (
+const Icon = ({ name, size = 22, color }: { name: string; size?: number; color?: string }) => (
   <MaterialCommunityIcons name={name as never} size={size} color={color} />
 );
 
@@ -94,11 +81,20 @@ function detectIntent(raw: string): Intent {
 
 // ---------- Root ----------
 export default function Index() {
+  return (
+    <ThemeProvider>
+      <IndexInner />
+    </ThemeProvider>
+  );
+}
+
+function IndexInner() {
+  const { C, styles, theme, setTheme } = useAppTheme();
   const [tab, setTab] = useState<Tab>("health");
   const [lang, setLangState] = useState<Lang>("en");
   const [prefsLoaded, setPrefsLoaded] = useState(false);
 
-  // device state
+  // device state (mocked)
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [battery, setBattery] = useState(86);
@@ -109,6 +105,10 @@ export default function Index() {
   const [steps, setSteps] = useState(0);
   const [tracking, setTracking] = useState(false);
   const [trackDuration, setTrackDuration] = useState(0);
+
+  // real BLE state
+  const [realBleInfo, setRealBleInfo] = useState<ConnectedInfo | null>(null);
+  const [realBpm, setRealBpm] = useState<number | null>(null);
 
   // prefs
   const [volume, setVolume] = useState(70);
@@ -334,11 +334,14 @@ export default function Index() {
       const data = await res.json();
       const reply = data.answer ?? tr(lang, "ai_greeting");
       setChat((c) => [...c, { id: `${Date.now()}-ai`, from: "ai", text: reply, time: clockNow() }]);
+      if (talkback) speak(reply, Math.max(0, Math.min(1, volume / 100)), lang);
     } catch {
+      const errMsg = lang === "id" ? "EQO AI sedang offline. Coba lagi nanti." : "EQO AI is offline. Try again shortly.";
       setChat((c) => [
         ...c,
-        { id: `${Date.now()}-ai`, from: "ai", text: lang === "id" ? "EQO AI sedang offline. Coba lagi nanti." : "EQO AI is offline. Try again shortly.", time: clockNow() },
+        { id: `${Date.now()}-ai`, from: "ai", text: errMsg, time: clockNow() },
       ]);
+      if (talkback) speak(errMsg, Math.max(0, Math.min(1, volume / 100)), lang);
     } finally {
       setAiTyping(false);
       setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 60);
@@ -417,7 +420,7 @@ export default function Index() {
             lang={lang}
             connected={connected}
             battery={battery}
-            bpm={bpm}
+            bpm={realBpm ?? bpm}
             hrCountdown={hrCountdown}
             hrReadings={hrReadings}
             steps={steps}
@@ -486,6 +489,10 @@ export default function Index() {
             startHold={startHold}
             cancelHold={cancelHold}
             toggleTracking={toggleTracking}
+            realBleConnected={!!realBleInfo}
+            realBleName={realBleInfo?.name ?? null}
+            onRealBpm={setRealBpm}
+            onRealConnect={setRealBleInfo}
           />
         )}
         {tab === "settings" && (
@@ -501,6 +508,8 @@ export default function Index() {
             volume={volume}
             changeVolume={changeVolume}
             onEditGoals={() => setEditOpen(true)}
+            theme={theme}
+            setTheme={setTheme}
           />
         )}
       </ScrollView>
@@ -556,6 +565,7 @@ export default function Index() {
 function HealthScreen({
   t, lang, connected, battery, bpm, hrCountdown, hrReadings, steps, stepGoal, activeMin, activeGoal, tracking, goalsPct, onGoDevice, onCardTap,
 }: any) {
+  const { C, styles } = useAppTheme();
   const zone = bpm === 0 ? "-" : bpm < 60 ? "LOW" : bpm < 100 ? "NORMAL" : bpm < 140 ? "ACTIVE" : "MAX";
   return (
     <>
@@ -686,6 +696,7 @@ function HealthScreen({
 }
 
 function LockableCard({ locked, children, lockedLabel, t, small }: any) {
+  const { C, styles } = useAppTheme();
   return (
     <View style={[styles.heroCard, small && styles.metric, locked && { opacity: 0.55 }]}>
       {children}
@@ -700,6 +711,7 @@ function LockableCard({ locked, children, lockedLabel, t, small }: any) {
 }
 
 function Section({ title, action }: { title: string; action?: string }) {
+  const { styles } = useAppTheme();
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -712,6 +724,7 @@ function Section({ title, action }: { title: string; action?: string }) {
 function GoalsScreen({
   t, connected, steps, stepGoal, activeMin, activeGoal, cal, calGoal, weeklySteps, weekLabels, activeDays, weekTotal, streak, stepPct, activePct, calPct,
 }: any) {
+  const { C, styles } = useAppTheme();
   const scoreVal = Math.min(100, Math.round((stepPct + activePct + calPct) / 3));
   const maxWeek = Math.max(...weeklySteps, 1);
   return (
@@ -772,6 +785,7 @@ function GoalsScreen({
 }
 
 function GoalProgress({ icon, title, pct, now, goal, unit, color }: any) {
+  const { styles } = useAppTheme();
   return (
     <View style={styles.goalRow}>
       <View style={styles.goalHead}>
@@ -789,6 +803,7 @@ function GoalProgress({ icon, title, pct, now, goal, unit, color }: any) {
 
 // ---------- AI Screen ----------
 function AIScreen({ t, chat, message, setMessage, send, listening, setListening, aiTyping, chatScrollRef }: any) {
+  const { C, styles } = useAppTheme();
   const prompts = [t("prompt_how"), t("prompt_goal"), t("prompt_pulse")];
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={80}>
@@ -867,8 +882,9 @@ function AIScreen({ t, chat, message, setMessage, send, listening, setListening,
 
 // ---------- Device Screen ----------
 function DeviceScreen({
-  t, connected, connecting, battery, rssi, tracking, steps, km, cal, trackDuration, holdProgress, startHold, cancelHold, toggleTracking,
+  t, connected, connecting, battery, rssi, tracking, steps, km, cal, trackDuration, holdProgress, startHold, cancelHold, toggleTracking, realBleConnected, realBleName, onRealBpm, onRealConnect,
 }: any) {
+  const { C, styles } = useAppTheme();
   const progressWidth = holdProgress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
   const mm = String(Math.floor(trackDuration / 60)).padStart(2, "0");
   const ss = String(trackDuration % 60).padStart(2, "0");
@@ -957,23 +973,28 @@ function DeviceScreen({
         <Text style={[styles.muted, { marginTop: 14 }]}>{t("ble_service")}</Text>
       </View>
 
-      <RealBLEPanel t={t} />
+      <RealBLEPanel t={t} onBpmStream={onRealBpm} onConnectChange={onRealConnect} />
     </>
   );
 }
 
 // ---------- Real BLE Panel ----------
-function RealBLEPanel({ t }: { t: (k: string) => string }) {
+function RealBLEPanel({ t, onBpmStream, onConnectChange }: { t: (k: string) => string; onBpmStream: (bpm: number | null) => void; onConnectChange: (info: ConnectedInfo | null) => void }) {
+  const { C, styles } = useAppTheme();
   const [scanning, setScanning] = useState(false);
   const [devices, setDevices] = useState<ScannedDevice[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [connected, setConnected] = useState<ConnectedInfo | null>(null);
   const stopRef = useRef<null | (() => void)>(null);
+  const hrStopRef = useRef<null | (() => void)>(null);
 
   useEffect(() => () => {
     if (stopRef.current) stopRef.current();
+    if (hrStopRef.current) hrStopRef.current();
     if (connected) ble.disconnect(connected.id).catch(() => {});
+    onBpmStream(null);
+    onConnectChange(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1020,8 +1041,11 @@ function RealBLEPanel({ t }: { t: (k: string) => string }) {
     if (connected?.id === d.id) {
       setBusyId(d.id);
       try {
+        if (hrStopRef.current) { hrStopRef.current(); hrStopRef.current = null; }
         await ble.disconnect(d.id);
         setConnected(null);
+        onBpmStream(null);
+        onConnectChange(null);
       } catch (e: any) {
         setError(e?.message ?? "Disconnect failed");
       } finally {
@@ -1031,8 +1055,11 @@ function RealBLEPanel({ t }: { t: (k: string) => string }) {
     }
     // disconnect any previous
     if (connected) {
+      if (hrStopRef.current) { hrStopRef.current(); hrStopRef.current = null; }
       try { await ble.disconnect(connected.id); } catch {}
       setConnected(null);
+      onBpmStream(null);
+      onConnectChange(null);
     }
     stopScan();
     setBusyId(d.id);
@@ -1040,6 +1067,15 @@ function RealBLEPanel({ t }: { t: (k: string) => string }) {
     try {
       const info = await ble.connect(d.id);
       setConnected(info);
+      onConnectChange(info);
+      // Try to subscribe to HR stream if EQOband service is present
+      if (info.hasEqoService) {
+        hrStopRef.current = await ble.streamHR(
+          info.id,
+          (bpm) => onBpmStream(bpm),
+          (msg) => setError(msg),
+        );
+      }
     } catch (e: any) {
       setError(e?.message ?? "Connect failed");
     } finally {
@@ -1153,8 +1189,9 @@ function RealBLEPanel({ t }: { t: (k: string) => string }) {
 
 // ---------- Settings Screen ----------
 function SettingsScreen({
-  t, lang, changeLang, connected, notifs, toggleNotifs, talkback, toggleTalkback, volume, changeVolume, onEditGoals,
+  t, lang, changeLang, connected, notifs, toggleNotifs, talkback, toggleTalkback, volume, changeVolume, onEditGoals, theme, setTheme,
 }: any) {
+  const { C, styles } = useAppTheme();
   return (
     <>
       <View style={styles.profile}>
@@ -1280,6 +1317,7 @@ function SettingsScreen({
 
 // ---------- Volume Slider (custom) ----------
 function VolumeSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const { styles } = useAppTheme();
   const [width, setWidth] = useState(0);
   return (
     <View
@@ -1312,6 +1350,7 @@ function VolumeSlider({ value, onChange }: { value: number; onChange: (v: number
 
 // ---------- Edit Goals Modal ----------
 function EditGoalsModal({ visible, t, stepGoal, activeGoal, calGoal, onClose, onSave }: any) {
+  const { C, styles } = useAppTheme();
   const [s, setS] = useState(String(stepGoal));
   const [a, setA] = useState(String(activeGoal));
   const [c, setC] = useState(String(calGoal));
@@ -1373,161 +1412,3 @@ function EditGoalsModal({ visible, t, stepGoal, activeGoal, calGoal, onClose, on
   );
 }
 
-// ---------- Styles ----------
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
-  center: { flex: 1, backgroundColor: C.bg, alignItems: "center", justifyContent: "center", gap: 16 },
-  content: { padding: 20, paddingBottom: 130 },
-
-  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 18, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  eyebrow: { fontSize: 11, letterSpacing: 1.5, color: C.ember, fontWeight: "700" },
-  title: { fontSize: 30, color: C.text, fontWeight: "700", marginTop: 5 },
-  headerRight: { alignItems: "flex-end", gap: 6 },
-  headerStatus: { flexDirection: "row", alignItems: "center", gap: 6 },
-  dot: { width: 7, height: 7, borderRadius: 5 },
-  status: { fontSize: 11, color: C.muted, letterSpacing: 1 },
-  langPill: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
-  langText: { fontSize: 11, color: C.text, fontWeight: "700", letterSpacing: 1 },
-
-  muted: { fontSize: 13, color: C.muted },
-  small: { fontSize: 12, color: C.muted, marginTop: 4 },
-
-  deviceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  connectPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20 },
-  connectText: { fontSize: 12, fontWeight: "700" },
-
-  batBar: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 14 },
-  batLbl: { fontSize: 10, color: C.muted, letterSpacing: 1 },
-  batTrack: { height: 5, backgroundColor: C.raised, borderRadius: 4, marginTop: 4, overflow: "hidden" },
-  batFill: { height: 5, backgroundColor: C.green, borderRadius: 4 },
-  batPct: { fontSize: 13, color: C.green, fontWeight: "700" },
-
-  heroCard: { backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 20, padding: 20, marginBottom: 12 },
-  cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  label: { fontSize: 11, letterSpacing: 1.2, color: C.muted, fontWeight: "700" },
-  bpm: { fontSize: 54, color: C.text, fontWeight: "700", marginTop: 9 },
-  unit: { fontSize: 15, color: C.muted, fontWeight: "500" },
-  wave: { height: 44, flexDirection: "row", alignItems: "center", gap: 5, marginTop: 20 },
-  waveBar: { width: 7, borderRadius: 4 },
-  lockRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
-  lockText: { fontSize: 9, color: C.muted, letterSpacing: 1 },
-
-  grid: { flexDirection: "row", gap: 12, marginBottom: 0 },
-  metric: { flex: 1, minHeight: 130, marginBottom: 12 },
-  metricValue: { fontSize: 25, color: C.text, fontWeight: "700", marginTop: 12, marginBottom: 4 },
-
-  section: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 24, marginBottom: 12 },
-  sectionTitle: { color: C.text, fontSize: 18, fontWeight: "700" },
-  action: { color: C.ember, fontWeight: "700", fontSize: 13 },
-
-  insight: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 16, padding: 16 },
-  insightIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,87,34,.15)", alignItems: "center", justifyContent: "center" },
-  cardTitle: { fontSize: 15, color: C.text, fontWeight: "700" },
-  body: { fontSize: 13, color: C.muted, lineHeight: 19, marginTop: 4 },
-
-  activityCard: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 16, padding: 16 },
-  greenText: { fontSize: 11, color: C.green, fontWeight: "700" },
-
-  goalBanner: { borderRadius: 20, padding: 20 },
-  goalScore: { fontSize: 44, color: C.text, fontWeight: "700", marginTop: 8 },
-
-  weeklyCard: { backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 16, padding: 16 },
-  weeklyDays: { flexDirection: "row", justifyContent: "space-between", height: 120, gap: 6, marginBottom: 12 },
-  dayCol: { flex: 1, alignItems: "center", justifyContent: "flex-end", gap: 6 },
-  dayBarWrap: { width: "100%", height: 90, backgroundColor: C.raised, borderRadius: 6, overflow: "hidden", justifyContent: "flex-end" },
-  dayBar: { width: "100%", borderRadius: 6 },
-  dayLabel: { fontSize: 10, color: C.muted },
-  weeklyFoot: { flexDirection: "row", justifyContent: "space-between", borderTopColor: C.border, borderTopWidth: 1, paddingTop: 10 },
-  weeklyFootTxt: { fontSize: 10, color: C.muted },
-  weeklyFootV: { color: C.text, fontWeight: "700" },
-
-  goalRow: { backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 10 },
-  goalHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-  goalBar: { height: 6, backgroundColor: C.raised, borderRadius: 4, overflow: "hidden", marginBottom: 6 },
-  goalFill: { height: 6, borderRadius: 4 },
-
-  achievement: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 16, padding: 16 },
-  achieved: { fontSize: 10, fontWeight: "700" },
-
-  aiIntro: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: C.card, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: C.border },
-  aiOrb: { width: 58, height: 58, borderRadius: 29, backgroundColor: "rgba(255,87,34,.15)", alignItems: "center", justifyContent: "center" },
-  promptRow: { flexDirection: "row", gap: 8, marginTop: 18, flexWrap: "wrap" },
-  prompt: { borderColor: C.border, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 9 },
-  promptText: { fontSize: 12, color: C.text },
-
-  chat: { maxHeight: 350, paddingTop: 20 },
-  empty: { color: C.muted, textAlign: "center", fontSize: 14 },
-  bubble: { padding: 12, borderRadius: 16, maxWidth: "88%", marginBottom: 10 },
-  mine: { backgroundColor: C.ember, alignSelf: "flex-end", borderBottomRightRadius: 4 },
-  theirs: { backgroundColor: C.card, alignSelf: "flex-start", borderBottomLeftRadius: 4, borderWidth: 1, borderColor: C.border },
-  bubbleText: { color: C.text, fontSize: 14, lineHeight: 20 },
-  bubbleTime: { fontSize: 9, color: "rgba(244,245,247,0.55)", marginTop: 4, letterSpacing: 0.5 },
-
-  composer: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 18, padding: 7, marginTop: 6 },
-  mic: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  input: { flex: 1, color: C.text, fontSize: 14, paddingHorizontal: 4, minHeight: 42 },
-  send: { width: 42, height: 42, borderRadius: 14, backgroundColor: C.ember, alignItems: "center", justifyContent: "center" },
-  saveText: { color: C.text, fontWeight: "700", fontSize: 14 },
-  voiceNote: { textAlign: "center", color: C.muted, fontSize: 11, marginTop: 10 },
-
-  deviceHero: { alignItems: "center", backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 20, padding: 25, marginBottom: 20 },
-  deviceIconWrap: { alignItems: "center", justifyContent: "center", padding: 20 },
-  devicePulse: { position: "absolute", width: 100, height: 100, borderRadius: 50, borderColor: "rgba(16,185,129,0.3)", borderWidth: 2 },
-  deviceName: { fontSize: 22, color: C.text, fontWeight: "700", marginTop: 4 },
-  deviceStats: { flexDirection: "row", gap: 22, marginTop: 22 },
-  deviceStat: { alignItems: "center" },
-  stat: { fontSize: 10, color: C.muted, letterSpacing: 1 },
-  statVal: { fontSize: 14, color: C.text, fontWeight: "700", marginTop: 4 },
-
-  holdWrap: { alignItems: "center", padding: 20, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 20, marginBottom: 12 },
-  holdBtn: { width: 140, height: 140, borderRadius: 70, borderColor: C.ember, borderWidth: 3, alignItems: "center", justifyContent: "center", gap: 6 },
-  holdBtnConnected: { borderColor: C.green },
-  holdBtnLabel: { fontSize: 11, letterSpacing: 2, fontWeight: "700" },
-  holdProgress: { position: "absolute", bottom: 0, left: 0, right: 0, height: 4, backgroundColor: C.raised, borderRadius: 2, overflow: "hidden" },
-  holdProgressFill: { height: 4, backgroundColor: C.ember, borderRadius: 2 },
-  holdHint: { fontSize: 10, color: C.muted, letterSpacing: 1.5, marginTop: 14 },
-  quickBtn: { marginTop: 12, paddingHorizontal: 16, paddingVertical: 8, borderColor: C.border, borderWidth: 1, borderRadius: 20 },
-  quickBtnTxt: { fontSize: 12, color: C.text, fontWeight: "700" },
-
-  trackCard: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 10 },
-  outline: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, borderColor: C.border },
-  infoBox: { backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 14, padding: 16 },
-
-  profile: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 18, padding: 16, marginBottom: 8 },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: C.ember, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 20, color: C.text, fontWeight: "700" },
-  settingsGroup: { fontSize: 10, letterSpacing: 2, color: C.muted, fontWeight: "700", marginTop: 20, marginBottom: 10 },
-  settingRow: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 10, minHeight: 68 },
-
-  langSwitch: { flexDirection: "row", backgroundColor: C.raised, borderRadius: 10, padding: 3 },
-  langOpt: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  langOptActive: { backgroundColor: C.ember },
-  langOptTxt: { fontSize: 11, color: C.muted, fontWeight: "700" },
-
-  slider: { height: 26, backgroundColor: C.raised, borderRadius: 6, marginTop: 8, position: "relative", justifyContent: "center" },
-  sliderFill: { height: 6, backgroundColor: C.green, borderRadius: 4, position: "absolute", left: 0, top: 10 },
-  sliderThumb: { position: "absolute", width: 16, height: 16, borderRadius: 8, backgroundColor: C.text, top: 5, marginLeft: -8 },
-  sliderTick: { position: "absolute", width: 2, height: 6, backgroundColor: "rgba(155,161,176,0.5)", top: 10, marginLeft: -1 },
-
-  version: { textAlign: "center", color: C.muted, fontSize: 11, marginTop: 28 },
-
-  tabs: { position: "absolute", bottom: 0, left: 0, right: 0, height: 82, backgroundColor: C.card, borderTopColor: C.border, borderTopWidth: 1, flexDirection: "row", justifyContent: "space-around", paddingTop: 12, paddingBottom: 10 },
-  tab: { alignItems: "center", gap: 4, minWidth: 55 },
-  tabText: { fontSize: 10, color: C.muted, fontWeight: "600" },
-
-  toast: { position: "absolute", top: 80, alignSelf: "center", backgroundColor: "rgba(16,185,129,0.18)", borderColor: C.green, borderWidth: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
-  toastText: { color: C.green, fontSize: 12, fontWeight: "700", letterSpacing: 1 },
-
-  modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", padding: 24 },
-  modalCard: { width: "100%", backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 20, padding: 24 },
-  modalInput: { backgroundColor: C.raised, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: C.text, fontSize: 15, marginTop: 6, marginBottom: 12 },
-  modalActions: { flexDirection: "row", gap: 12, marginTop: 12 },
-
-  // Real BLE panel
-  betaWarn: { flexDirection: "row", gap: 10, backgroundColor: C.raised, borderRadius: 10, padding: 12, marginTop: 12, alignItems: "flex-start" },
-  warnTitle: { fontSize: 13, color: C.text, fontWeight: "700", marginBottom: 2 },
-  scanBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 12, marginTop: 14 },
-  scanBtnTxt: { color: C.text, fontWeight: "700", fontSize: 14, letterSpacing: 1 },
-  scanRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
-  deviceItem: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: C.raised, borderRadius: 10, padding: 12, marginTop: 10 },
-});

@@ -47,7 +47,8 @@
           "backgroundColor": "#000000"
         }
       ],
-      "react-native-ble-plx"
+      "react-native-ble-plx",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true
