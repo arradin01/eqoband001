@@ -68,3 +68,9 @@ EQOband is a companion mobile app for a wearable wristband (Seeed Studio XIAO ES
 ## Future Work
 - Wire real BLE (`react-native-ble-plx`) once ESP32-C3 firmware exposes service/characteristic UUIDs.
 - Native voice pipeline (STT + TTS) once a direct OpenAI key is provided (current key routed via emergent integrations).
+
+## Deployment
+- Package manager: **Yarn 1.22.22** (deterministic via `yarn.lock`)
+- `package-lock.json` removed to avoid lockfile collision on EAS cloud builds
+- `eas.json` present with `development`, `preview` (APK internal), and `production` (AAB) profiles
+- Build via Emergent Publish button → Android/iOS build pipeline
