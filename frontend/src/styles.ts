@@ -163,5 +163,44 @@ export function makeStyles(C: Palette) {
     themeOpt: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexDirection: "row", alignItems: "center", gap: 4 },
     themeOptActive: { backgroundColor: C.ember },
     themeOptTxt: { fontSize: 11, color: C.muted, fontWeight: "700" },
+
+    // State & Gesture Bar
+    stateBanner: { marginHorizontal: 20, marginBottom: 12, borderRadius: 14, padding: 12, flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1 },
+    stateText: { fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
+    stateSub: { fontSize: 11, color: C.muted, marginTop: 2 },
+
+    // Floating tracking banner
+    activeTrackingPill: { marginHorizontal: 20, marginBottom: 10, backgroundColor: "rgba(16,185,129,0.14)", borderColor: C.green, borderWidth: 1, borderRadius: 16, padding: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    activeTrackingPillLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+    activeTrackingPillTitle: { fontSize: 12, color: C.green, fontWeight: "700", letterSpacing: 0.8 },
+    activeTrackingPillSub: { fontSize: 11, color: C.text, marginTop: 2 },
+
+    // Gesture Simulator Card
+    gestureSimBox: { backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 18, padding: 16, marginBottom: 14 },
+    gestureBtnRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+    gestureBtn: { flex: 1, backgroundColor: C.raised, borderColor: C.border, borderWidth: 1, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 6, alignItems: "center", justifyContent: "center", gap: 4 },
+    gestureBtnText: { fontSize: 11, fontWeight: "700", color: C.text, textAlign: "center" },
+    gestureBtnCode: { fontSize: 9, color: C.muted, fontWeight: "600" },
+    lastGestureFeed: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.border, flexDirection: "row", alignItems: "center", gap: 8 },
+    lastGestureText: { fontSize: 11, color: C.muted, flex: 1 },
+
+    // Voice Assistant Sheet / Overlay
+    voiceOverlay: { position: "absolute", bottom: 84, left: 20, right: 20, backgroundColor: C.card, borderColor: C.ember, borderWidth: 1.5, borderRadius: 20, padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
+    voiceHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+    voiceTitle: { fontSize: 13, fontWeight: "800", color: C.ember, letterSpacing: 1 },
+    voiceWaveRow: { height: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, marginVertical: 8 },
+    voiceWaveBar: { width: 4, backgroundColor: C.ember, borderRadius: 2 },
+    voiceControls: { flexDirection: "row", gap: 10, marginTop: 8 },
+    voiceDiscardBtn: { flex: 1, backgroundColor: C.raised, borderRadius: 10, paddingVertical: 10, alignItems: "center", justifyContent: "center" },
+    voiceDiscardTxt: { fontSize: 12, color: C.muted, fontWeight: "600" },
+    voiceSendBtn: { flex: 1, backgroundColor: C.ember, borderRadius: 10, paddingVertical: 10, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
+    voiceSendTxt: { fontSize: 12, color: "#fff", fontWeight: "700" },
+
+    // Session History Item
+    sessionCard: { backgroundColor: C.raised, borderRadius: 12, padding: 12, marginBottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    sessionTitle: { fontSize: 13, color: C.text, fontWeight: "700" },
+    sessionSub: { fontSize: 11, color: C.muted, marginTop: 2 },
+    sessionBadge: { backgroundColor: "rgba(16,185,129,0.14)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    sessionBadgeTxt: { fontSize: 10, color: C.green, fontWeight: "700" },
   });
 }

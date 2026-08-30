@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Response
+from fastapi import FastAPI, APIRouter, HTTPException, Response, UploadFile, File, Form
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,13 +6,15 @@ import os
 import re
 import hashlib
 import logging
+import base64
+import tempfile
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage
-from emergentintegrations.llm.openai import OpenAITextToSpeech
+from emergentintegrations.llm.openai import OpenAITextToSpeech, OpenAISpeechToText
 import emoji as emoji_lib
 
 
@@ -213,6 +215,180 @@ async def get_tts_audio(key: str, ext: str):
         media_type=MEDIA_TYPES[ext],
         headers={"Cache-Control": "public, max-age=31536000"},
     )
+
+
+# ---------------- STT (Speech to Text) ----------------
+class Base64STTRequest(BaseModel):
+    audio_base64: str
+    format: Optional[str] = "m4a"  # m4a, wav, mp3, webm
+    language: Optional[str] = None
+    prompt: Optional[str] = None
+
+
+@api_router.post("/stt")
+async def speech_to_text(request: Base64STTRequest):
+    """Transcribe base64 encoded audio using Whisper via Emergent Universal Key."""
+    raw_b64 = request.audio_base64
+    if not raw_b64 or not raw_b64.strip():
+        raise HTTPException(status_code=400, detail="Audio data is required")
+
+    # Strip data URL prefix if present (e.g. data:audio/webm;base64,...)
+    if "," in raw_b64:
+        raw_b64 = raw_b64.split(",", 1)[1]
+
+    try:
+        audio_bytes = base64.b64decode(raw_b64)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid base64 payload: {str(e)}")
+
+    if len(audio_bytes) < 100:
+        raise HTTPException(status_code=400, detail="Audio payload too short")
+
+    ext = (request.format or "m4a").lower().strip(".")
+    if ext not in ["m4a", "wav", "mp3", "webm", "mp4", "mpeg", "mpga"]:
+        ext = "m4a"
+
+    api_key = os.getenv("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="STT unavailable: missing key")
+
+    stt = OpenAISpeechToText(api_key=api_key)
+    with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as tmp:
+        tmp.write(audio_bytes)
+        tmp_path = Path(tmp.name)
+
+    try:
+        res = await stt.transcribe(
+            file=tmp_path,
+            model="whisper-1",
+            response_format="json",
+            prompt=request.prompt,
+            language=request.language,
+        )
+        # res can be a dict or object with text attribute
+        text = ""
+        if isinstance(res, dict):
+            text = res.get("text", "")
+        elif hasattr(res, "text"):
+            text = str(res.text)
+        elif hasattr(res, "get"):
+            text = res.get("text", "")
+        else:
+            text = str(res)
+        return {"text": text.strip(), "language": request.language}
+    except Exception as exc:
+        logger.warning("STT transcription error: %s", exc)
+        raise HTTPException(status_code=502, detail=f"STT failed: {str(exc)}")
+    finally:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
+
+
+@api_router.post("/stt/upload")
+async def speech_to_text_file(
+    file: UploadFile = File(...),
+    language: Optional[str] = Form(None),
+    prompt: Optional[str] = Form(None),
+):
+    """Transcribe multipart uploaded audio file using Whisper."""
+    api_key = os.getenv("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="STT unavailable: missing key")
+
+    ext = Path(file.filename or "audio.m4a").suffix or ".m4a"
+    content = await file.read()
+    if len(content) < 100:
+        raise HTTPException(status_code=400, detail="Audio file is empty or too short")
+
+    stt = OpenAISpeechToText(api_key=api_key)
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = Path(tmp.name)
+
+    try:
+        res = await stt.transcribe(
+            file=tmp_path,
+            model="whisper-1",
+            response_format="json",
+            prompt=prompt,
+            language=language,
+        )
+        text = res.get("text", "") if isinstance(res, dict) else getattr(res, "text", str(res))
+        return {"text": str(text).strip(), "language": language}
+    except Exception as exc:
+        logger.warning("STT file transcription error: %s", exc)
+        raise HTTPException(status_code=502, detail=f"STT file failed: {str(exc)}")
+    finally:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
+
+
+# ---------------- Tracking Sessions ----------------
+class TrackingSessionCreate(BaseModel):
+    steps: int = 0
+    duration: int = 0  # seconds
+    distance_km: float = 0.0
+    calories_kcal: int = 0
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    source: Optional[str] = "ttp223_gesture"
+
+
+class TrackingSession(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    steps: int
+    duration: int
+    distance_km: float
+    calories_kcal: int
+    start_time: str
+    end_time: str
+    source: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@api_router.post("/tracking/session")
+async def save_tracking_session(session: TrackingSessionCreate):
+    """Save a completed tracking session (invoked on DOUBLE_TAP stop or manual stop)."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    record = {
+        "id": str(uuid.uuid4()),
+        "steps": session.steps,
+        "duration": session.duration,
+        "distance_km": session.distance_km,
+        "calories_kcal": session.calories_kcal,
+        "start_time": session.start_time or now_iso,
+        "end_time": session.end_time or now_iso,
+        "source": session.source or "ttp223_gesture",
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.tracking_sessions.insert_one(record)
+    # Remove Mongo's internal _id for serialization
+    record.pop("_id", None)
+    return {"status": "saved", "session": record}
+
+
+@api_router.get("/tracking/sessions")
+async def get_tracking_sessions(limit: int = 50):
+    """Get list of recent saved tracking sessions."""
+    docs = await db.tracking_sessions.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    # Convert datetime objects to isoformat strings
+    for d in docs:
+        if isinstance(d.get("created_at"), datetime):
+            d["created_at"] = d["created_at"].isoformat()
+    return {"sessions": docs, "count": len(docs)}
+
+
+@api_router.delete("/tracking/sessions")
+async def clear_tracking_sessions():
+    """Clear all saved tracking sessions."""
+    res = await db.tracking_sessions.delete_many({})
+    return {"deleted_count": res.deleted_count}
 
 
 @api_router.post("/status", response_model=StatusCheck)

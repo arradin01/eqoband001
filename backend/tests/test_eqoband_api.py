@@ -1,7 +1,7 @@
 import os
 import requests
 
-BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL").rstrip("/")
+BASE_URL = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "http://127.0.0.1:8001").rstrip("/")
 
 
 def test_telemetry_shape_and_values():
@@ -90,3 +90,39 @@ def test_tts_cache_reuse_same_key():
     r2 = requests.post(f"{BASE_URL}/api/tts", json=payload, timeout=60)
     assert r1.status_code == 200 and r2.status_code == 200
     assert r1.json()["url"] == r2.json()["url"]
+
+
+# ---- Tracking Sessions ----
+def test_tracking_session_save_and_retrieve():
+    """Test saving a completed tracking session and querying it."""
+    session_data = {
+        "steps": 1420,
+        "duration": 480,
+        "distance_km": 1.06,
+        "calories_kcal": 56,
+        "source": "ttp223_gesture",
+    }
+    resp = requests.post(f"{BASE_URL}/api/tracking/session", json=session_data, timeout=15)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "saved"
+    assert data["session"]["steps"] == 1420
+    assert data["session"]["duration"] == 480
+
+    # Retrieve sessions
+    get_resp = requests.get(f"{BASE_URL}/api/tracking/sessions", timeout=15)
+    assert get_resp.status_code == 200
+    get_data = get_resp.json()
+    assert "sessions" in get_data
+    assert get_data["count"] >= 1
+
+
+# ---- STT endpoint validation ----
+def test_stt_rejects_empty_audio():
+    resp = requests.post(f"{BASE_URL}/api/stt", json={"audio_base64": ""}, timeout=15)
+    assert resp.status_code == 400
+
+def test_stt_rejects_corrupted_short_payload():
+    resp = requests.post(f"{BASE_URL}/api/stt", json={"audio_base64": "abc"}, timeout=15)
+    assert resp.status_code == 400
+

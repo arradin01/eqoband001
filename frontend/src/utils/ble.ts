@@ -3,9 +3,7 @@
 //   Service UUID:         6e400001-b5a3-f393-e0a9-e50e24dcca9e
 //   HR Notify Char:       6e400002-b5a3-f393-e0a9-e50e24dcca9e  (uint8 BPM)
 //   Battery Read Char:    6e400003-b5a3-f393-e0a9-e50e24dcca9e  (uint8 percent)
-//
-// On the phone side we subscribe to the HR characteristic; on the ESP side you
-// notify() a single byte (BPM) whenever your MAX30102 driver has a new reading.
+//   Gesture Notify Char:  6e400004-b5a3-f393-e0a9-e50e24dcca9e  (uint8: 1=SINGLE_TAP, 2=DOUBLE_TAP, 3=LONG_PRESS)
 
 import Constants from "expo-constants";
 import { Buffer } from "buffer";
@@ -14,10 +12,21 @@ import { PermissionsAndroid, Platform } from "react-native";
 export const EQOBAND_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 export const EQOBAND_HR_CHAR_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
 export const EQOBAND_BAT_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+export const EQOBAND_GESTURE_CHAR_UUID = "6e400004-b5a3-f393-e0a9-e50e24dcca9e";
+
+export type GestureCode = 1 | 2 | 3;
+export type GestureName = "SINGLE_TAP" | "DOUBLE_TAP" | "LONG_PRESS";
+
+export const GESTURE_MAP: Record<number, GestureName> = {
+  1: "SINGLE_TAP",
+  2: "DOUBLE_TAP",
+  3: "LONG_PRESS",
+};
 
 export type ScannedDevice = { id: string; name: string | null; rssi: number | null };
 export type ConnectedInfo = { id: string; name: string | null; services: string[]; hasEqoService: boolean };
 export type HRStreamUnsub = () => void;
+export type GestureStreamUnsub = () => void;
 
 type Unsub = () => void;
 
@@ -33,6 +42,11 @@ type BleAPI = {
     onBpm: (bpm: number) => void,
     onError?: (e: string) => void,
   ) => Promise<HRStreamUnsub>;
+  streamGestures: (
+    deviceId: string,
+    onGesture: (gesture: GestureCode) => void,
+    onError?: (e: string) => void,
+  ) => Promise<GestureStreamUnsub>;
   readBattery: (deviceId: string) => Promise<number | null>;
 };
 
@@ -63,6 +77,7 @@ function makeStub(reason: string): BleAPI {
     connect: async () => { throw new Error(reason); },
     disconnect: async () => {},
     streamHR: async () => () => {},
+    streamGestures: async () => () => {},
     readBattery: async () => null,
   };
 }
@@ -142,6 +157,31 @@ function makeReal(): BleAPI {
         return () => { try { sub.remove(); } catch {} };
       } catch (e: any) {
         onError?.(e?.message ?? "HR stream failed");
+        return () => {};
+      }
+    },
+    async streamGestures(deviceId, onGesture, onError) {
+      const m = getManager();
+      try {
+        const sub = m.monitorCharacteristicForDevice(
+          deviceId,
+          EQOBAND_SERVICE_UUID,
+          EQOBAND_GESTURE_CHAR_UUID,
+          (err: any, ch: any) => {
+            if (err) { onError?.(err?.message ?? String(err)); return; }
+            if (!ch?.value) return;
+            const bytes = b64ToBytes(ch.value);
+            if (bytes.length > 0) {
+              const code = bytes[0];
+              if (code === 1 || code === 2 || code === 3) {
+                onGesture(code as GestureCode);
+              }
+            }
+          },
+        );
+        return () => { try { sub.remove(); } catch {} };
+      } catch (e: any) {
+        onError?.(e?.message ?? "Gesture stream failed");
         return () => {};
       }
     },
