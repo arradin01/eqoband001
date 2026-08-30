@@ -142,6 +142,21 @@ backend:
         comment: "Verified existing endpoints."
 
 frontend:
+  - task: "TTS language matching (English vs Indonesian)"
+    implemented: true
+    working: true
+    file: "frontend/src/utils/tts.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Fixed matchVoice logic in tts.ts so it switches to English voices when lang is 'en' and Indonesian voices when lang is 'id'."
+      - working: true
+        agent: "testing"
+        comment: "TESTED & VERIFIED: Language switcher and TTS logic working correctly. (1) Default language is ID ✓ (2) Header lang-toggle switches between EN/ID ✓ (3) Settings language switches (setting-lang-en, setting-lang-id) work correctly ✓ (4) AI chat responds in English when lang=EN ✓ (5) AI chat responds in Indonesian when lang=ID ✓ (6) TTS voice selection logic in tts.ts correctly matches English voices for 'en' and Indonesian voices for 'id' (lines 29-44) ✓. All UI elements update to correct language. Screenshots confirm functionality."
+
   - task: "BLE Gesture characteristic and listener (6E400004...)"
     implemented: true
     working: true
@@ -180,14 +195,13 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "2.0"
-  test_sequence: 2
-  run_ui: false
+  version: "2.2"
+  test_sequence: 4
+  run_ui: true
 
 test_plan:
   current_focus:
-    - "Speech-to-Text STT endpoint via Whisper (/api/stt)"
-    - "Tracking session persistence API (/api/tracking/session)"
+    - "TTS language matching (English vs Indonesian)"
     - "Application State Machine & Gesture controller UI"
   stuck_tasks: []
   test_all: false
@@ -195,4 +209,6 @@ test_plan:
 
 agent_communication:
   - agent: "main"
-    message: "All backend and frontend state machine, gesture flows, STT Whisper, and tracking sessions have been implemented and verified."
+    message: "Fixed TTS voice selection for EN and ID in frontend/src/utils/tts.ts. Ready for testing."
+  - agent: "testing"
+    message: "Completed comprehensive testing of language switcher and TTS behavior. All tests PASSED: (1) Default language ID verified, (2) Header toggle EN/ID working, (3) Settings language switches functional, (4) AI chat responds correctly in both English and Indonesian based on language setting, (5) TTS voice selection logic correctly implemented. UI elements properly update to match selected language. No issues found. Ready for production."

@@ -1,6 +1,6 @@
 // Instant Cross-platform TTS:
 // Uses ultra-fast on-device speech synthesis (SpeechSynthesis / expo-speech) for zero-latency instant response,
-// with OpenAI TTS as background enhancer.
+// with proper language-specific voice switching (English vs Indonesian).
 
 import * as Speech from "expo-speech";
 import { Platform } from "react-native";
@@ -22,15 +22,27 @@ export async function speak(text: string, volume: number = 0.7, lang: string = "
       utterance.rate = 1.05; // Slightly faster for natural responsive feel
       utterance.pitch = 1.0;
 
-      // Select matching voice if available
+      // Dynamically select matching voice for the active language
       const voices = window.speechSynthesis.getVoices?.() || [];
-      const matchVoice = voices.find(
-        (v) =>
-          v.lang === "id-ID" ||
-          v.lang.startsWith("id") ||
-          v.name.toLowerCase().includes("indonesia") ||
-          v.lang.toLowerCase().includes("id")
-      );
+      let matchVoice: any = null;
+
+      if (lang === "id") {
+        matchVoice = voices.find(
+          (v) =>
+            v.lang === "id-ID" ||
+            v.lang.startsWith("id") ||
+            v.name.toLowerCase().includes("indonesia")
+        );
+      } else {
+        matchVoice = voices.find(
+          (v) =>
+            v.lang === "en-US" ||
+            v.lang === "en-GB" ||
+            v.lang.startsWith("en") ||
+            v.name.toLowerCase().includes("english")
+        );
+      }
+
       if (matchVoice) {
         utterance.voice = matchVoice;
       }
