@@ -1,7 +1,6 @@
 // Cross-platform TTS: OpenAI TTS when online (via backend /api/tts), on-device
 // expo-speech fallback when offline. Volume controlled by caller (0..1).
 
-import * as FileSystem from "expo-file-system";
 import * as Network from "expo-network";
 import * as Speech from "expo-speech";
 import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
@@ -66,7 +65,7 @@ async function speakOnline(text: string, volume: number) {
       player.volume = Math.max(0, Math.min(1, volume));
     } catch {}
     player.play();
-  } catch (e) {
+  } catch {
     // Fall back to offline TTS on any online failure
     await speakOffline(text, volume, "en");
   }

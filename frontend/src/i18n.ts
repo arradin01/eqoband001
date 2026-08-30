@@ -110,6 +110,9 @@ export const T: Record<Lang, Record<string, string>> = {
     prefs: "PREFERENCES",
     language_lbl: "Language",
     language_desc: "English / Bahasa Indonesia",
+    theme_lbl: "Theme",
+    theme_dark: "Dark",
+    theme_light: "Light",
     device_group: "DEVICE",
     bluetooth: "Bluetooth",
     bt_desc_on: "EQOband - BLE 5.0",
@@ -159,6 +162,7 @@ export const T: Record<Lang, Record<string, string>> = {
     connect: "Connect",
     connected_to: "Connected to",
     services_found: "Services",
+    firmware_hint: "Flash /frontend/assets/eqoband_firmware.ino to your XIAO ESP32-C3 with a MAX30102 wired to GPIO 6/7 to stream live BPM.",
   },
   id: {
     live: "AKTIF",
@@ -258,6 +262,9 @@ export const T: Record<Lang, Record<string, string>> = {
     prefs: "PREFERENSI",
     language_lbl: "Bahasa",
     language_desc: "English / Bahasa Indonesia",
+    theme_lbl: "Tema",
+    theme_dark: "Gelap",
+    theme_light: "Terang",
     device_group: "PERANGKAT",
     bluetooth: "Bluetooth",
     bt_desc_on: "EQOBand - BLE 5.0",
@@ -305,6 +312,7 @@ export const T: Record<Lang, Record<string, string>> = {
     connect: "Sambungkan",
     connected_to: "Tersambung ke",
     services_found: "Servis",
+    firmware_hint: "Flash file /frontend/assets/eqoband_firmware.ino ke XIAO ESP32-C3 dengan MAX30102 di GPIO 6/7 untuk streaming BPM langsung.",
   },
 };
 

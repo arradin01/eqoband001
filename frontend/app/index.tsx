@@ -1,6 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import * as Network from "expo-network";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,6 +9,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Switch,
   Text,
   TextInput,
@@ -18,10 +18,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Lang, tr } from "@/src/i18n";
-import { Theme, ThemeProvider, useAppTheme } from "@/src/theme";
-import { ble, ConnectedInfo, EQOBAND_SERVICE_UUID, HRStreamUnsub, ScannedDevice } from "@/src/utils/ble";
+import { ThemeProvider, useAppTheme } from "@/src/theme";
+import { ble, ConnectedInfo, ScannedDevice } from "@/src/utils/ble";
 import { storage } from "@/src/utils/storage";
-import { speak, stopSpeaking } from "@/src/utils/tts";
+import { speak } from "@/src/utils/tts";
 
 const API = `${process.env.EXPO_PUBLIC_BACKEND_URL ?? ""}/api`;
 
@@ -967,10 +967,14 @@ function DeviceScreen({
       <Section title={t("device_information")} />
       <View style={styles.infoBox}>
         <Text style={styles.muted}>{t("service_uuid")}</Text>
-        <Text style={styles.body}>0000FFE0-0000-1000-8000-00805F9B34FB</Text>
-        <Text style={[styles.muted, { marginTop: 14 }]}>{t("char_uuid")}</Text>
-        <Text style={styles.body}>0000FFE1-0000-1000-8000-00805F9B34FB</Text>
-        <Text style={[styles.muted, { marginTop: 14 }]}>{t("ble_service")}</Text>
+        <Text style={styles.body}>6E400001-B5A3-F393-E0A9-E50E24DCCA9E</Text>
+        <Text style={[styles.muted, { marginTop: 14 }]}>{t("char_uuid")} (HR notify)</Text>
+        <Text style={styles.body}>6E400002-B5A3-F393-E0A9-E50E24DCCA9E</Text>
+        <Text style={[styles.muted, { marginTop: 14 }]}>{t("char_uuid")} (Battery read)</Text>
+        <Text style={styles.body}>6E400003-B5A3-F393-E0A9-E50E24DCCA9E</Text>
+        <Text style={[styles.muted, { marginTop: 14, fontSize: 11 }]}>
+          {t("firmware_hint")}
+        </Text>
       </View>
 
       <RealBLEPanel t={t} onBpmStream={onRealBpm} onConnectChange={onRealConnect} />
@@ -1206,6 +1210,33 @@ function SettingsScreen({
       </View>
 
       <Text style={styles.settingsGroup}>{t("prefs")}</Text>
+
+      {/* Theme */}
+      <View style={styles.settingRow}>
+        <Icon name="theme-light-dark" color={C.purple} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.cardTitle}>{t("theme_lbl")}</Text>
+          <Text style={styles.muted}>{theme === "dark" ? t("theme_dark") : t("theme_light")}</Text>
+        </View>
+        <View style={styles.themeSwitch}>
+          <Pressable
+            testID="setting-theme-dark"
+            onPress={() => setTheme("dark")}
+            style={[styles.themeOpt, theme === "dark" && styles.themeOptActive]}
+          >
+            <Icon name="weather-night" size={12} color={theme === "dark" ? C.text : C.muted} />
+            <Text style={[styles.themeOptTxt, theme === "dark" && { color: C.text }]}>{t("theme_dark")}</Text>
+          </Pressable>
+          <Pressable
+            testID="setting-theme-light"
+            onPress={() => setTheme("light")}
+            style={[styles.themeOpt, theme === "light" && styles.themeOptActive]}
+          >
+            <Icon name="white-balance-sunny" size={12} color={theme === "light" ? C.text : C.muted} />
+            <Text style={[styles.themeOptTxt, theme === "light" && { color: C.text }]}>{t("theme_light")}</Text>
+          </Pressable>
+        </View>
+      </View>
 
       {/* Language */}
       <View style={styles.settingRow}>

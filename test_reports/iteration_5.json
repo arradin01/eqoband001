@@ -1,0 +1,45 @@
+{
+  "summary": "Backend + frontend pass for TTS + theme-toggle iteration. Backend pytest 9/9 green (telemetry, insights, /api/ai/chat en+id, blank-message 400, new: /api/tts POST returns cached url + GET streams audio/mpeg > 500 bytes, blank text -> 400, missing hash -> 404, cache reuse returns identical url). Frontend (Expo web preview @ 390x844) boots cleanly under new ThemeProvider + makeStyles factory. Settings > Preferences now renders the Theme row with testIDs setting-theme-dark and setting-theme-light; tapping Light visually swaps the whole surface to a near-white palette (dark text on light bg) and tapping Dark restores the dark palette - confirmed via screenshots iter5_settings_dark/light. Theme persists across full page reload (eqo:theme key). Language EN/ID toggle still works and rewrites the Theme label. Device tab renders all three new EQOband UUIDs 6E400001..., 6E400002..., 6E400003... and the firmware hint mentioning /frontend/assets/eqoband_firmware.ino. On web ble.supported=false so ble-scan-btn is correctly NOT rendered and the amber 'Preview build - Real BLE is disabled' fallback is present. POST /api/ai/chat still returns real LLM answers end-to-end from the frontend. Native BLE tap-to-connect + expo-audio TTS playback are not exercised (native-build only, per agent-to-agent note) and not flagged.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "Toast View", "issue": "Carry-over from iteration_3/4: props.pointerEvents is deprecated on React Native web - use style.pointerEvents. Reference: /app/frontend/app/index.tsx:536"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_eqoband_api.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/ui/iter5_boot.jpeg",
+    "/app/test_reports/ui/iter5_settings_dark.jpeg",
+    "/app/test_reports/ui/iter5_settings_light.jpeg",
+    "/app/test_reports/ui/iter5_after_reload.jpeg",
+    "/app/test_reports/ui/iter5_settings_id.jpeg",
+    "/app/test_reports/ui/iter5_device.jpeg",
+    "/app/test_reports/ui/iter5_ai.jpeg"
+  ],
+  "action_items": [
+    "(Minor, carry-over) Migrate the Toast <View pointerEvents=\"none\"> at /app/frontend/app/index.tsx:536 to style={{ pointerEvents: 'none' }} to silence RN-web deprecation.",
+    "(Native-only, out of scope for web preview) Verify on a real Android build that (a) POST /api/tts audio actually plays through expo-audio createAudioPlayer at the volume set by the slider, and (b) MAX30102 HR notifications on characteristic 6E400002 stream into realBpm via ble.streamHR."
+  ],
+  "critical_code_review_comments": [
+    "theme.tsx: ThemeProvider gates itself with ready+useState, useMemo depends on [theme, ready] so styles recompute on toggle. StatusBar swaps light/dark via expo-status-bar - clean.",
+    "styles.ts (makeStyles(C)) is called from every screen via useAppTheme() - correct dependency injection of palette, both light and dark render without contrast issues in screenshots.",
+    "Backend /api/tts: uses sha256(text|voice|speed|model|fmt) cache key, trims text > 4000 chars, writes audio_cache/{key}.{fmt}, and returns audio/mpeg with 1yr cache-control - solid.",
+    "Backend /api/tts GET: 404 when file missing (verified). Content-Type map covers mp3/wav/opus/aac/flac/pcm.",
+    "Potential concern (not blocking): /app/frontend/app/index.tsx line 1368 references StyleSheet.absoluteFillObject but StyleSheet is not imported from 'react-native'. In practice the Volume Slider still renders on web (verified via screenshot), so RN-web must be tolerating the undefined lookup on the Pressable style prop path - but on a native build this WILL throw ReferenceError. Recommend adding `StyleSheet` to the react-native import in index.tsx before shipping a native build.",
+    "index.tsx: useEffect for prefsLoaded correctly loads eqo:theme via ThemeProvider (separate provider) and eqo:lang/volume/notifs/talkback/stepGoal/activeGoal/calGoal in the inner effect - no clash of keys.",
+    "detectIntent + executeIntent handles power_off/start_track/stop_track/volume/open in parallel with LLM call - side-effects apply immediately (nice UX)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_eqoband_api.py (added 4 TTS tests: generate+fetch, blank text 400, missing 404, cache reuse)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (all requested flows on web preview)"},
+  "seed_data_creation": "None. TTS test writes cached audio under /app/backend/audio_cache/ - safe/idempotent (sha256 keyed).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Theme is persisted via storage key eqo:theme and read inside ThemeProvider (separate from the prefs bundle in IndexInner). Do not check document.body.backgroundColor to verify theme - RN-web keeps that transparent; instead assert visually or query the outermost SafeAreaView inline style. Real BLE panel and expo-audio TTS playback remain native-only; do NOT flag their web fallbacks. index.tsx uses StyleSheet.absoluteFillObject without importing StyleSheet - works on web but will crash on native; already flagged as an action item.",
+  "rca_of_issue": "N/A - all requested behavior verified. Only latent risk is the missing StyleSheet import in index.tsx which will surface only on native builds."
+}

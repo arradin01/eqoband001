@@ -55,3 +55,38 @@ def test_ai_chat_accepts_language_param():
         payload = response.json()
         assert isinstance(payload["answer"], str) and payload["answer"]
         assert payload["source"] in {"baseline", "eqoai"}
+
+
+# ---- TTS ----
+def test_tts_generate_and_fetch_audio():
+    """POST /api/tts should return a cached url and GET should stream audio/mpeg."""
+    payload = {"text": "Hello from EQO band", "voice": "nova", "model": "tts-1", "format": "mp3"}
+    resp = requests.post(f"{BASE_URL}/api/tts", json=payload, timeout=60)
+    assert resp.status_code == 200, f"status={resp.status_code}, body={resp.text}"
+    data = resp.json()
+    assert "url" in data and data["url"].startswith("/api/tts/") and data["url"].endswith(".mp3")
+    # fetch audio bytes
+    audio_url = f"{BASE_URL}{data['url']}"
+    audio_resp = requests.get(audio_url, timeout=30)
+    assert audio_resp.status_code == 200
+    assert audio_resp.headers.get("content-type", "").startswith("audio/mpeg")
+    assert len(audio_resp.content) > 500
+
+
+def test_tts_rejects_blank_text():
+    resp = requests.post(f"{BASE_URL}/api/tts", json={"text": "   "}, timeout=15)
+    assert resp.status_code == 400
+
+
+def test_tts_get_missing_returns_404():
+    resp = requests.get(f"{BASE_URL}/api/tts/nonexistent_hash_xyz.mp3", timeout=15)
+    assert resp.status_code == 404
+
+
+def test_tts_cache_reuse_same_key():
+    """Same text/voice/model should reuse the same cached URL."""
+    payload = {"text": "cache reuse test", "voice": "nova", "model": "tts-1", "format": "mp3"}
+    r1 = requests.post(f"{BASE_URL}/api/tts", json=payload, timeout=60)
+    r2 = requests.post(f"{BASE_URL}/api/tts", json=payload, timeout=60)
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert r1.json()["url"] == r2.json()["url"]
