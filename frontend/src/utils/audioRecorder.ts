@@ -213,8 +213,11 @@ export async function transcribeAudio(
       body: JSON.stringify({
         audio_base64: payload,
         format: "webm",
-        language,
-        prompt: "EQOband health assistant query",
+        language: language === "id" ? "id" : "en",
+        prompt:
+          language === "id"
+            ? "Percakapan asisten suara gelang pintar EQOband dalam Bahasa Indonesia."
+            : "EQOband wearable smart health assistant conversation.",
       }),
     });
 

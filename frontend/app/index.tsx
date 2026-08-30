@@ -96,10 +96,10 @@ type Intent =
 
 function detectIntent(raw: string): Intent {
   const q = raw.toLowerCase().trim();
-  const stepKw = /(langkah|steps|jalan|walk)/;
-  const startKw = /(mulai|start|aktifkan|hidupkan|jalankan|begin)/;
-  const stopKw = /(berhenti|stop|hentikan|pause|nonaktifkan|matikan tracking|stop tracking)/;
-  const powerKw = /(power off|shutdown|shut down|disconnect|putuskan|matikan gelang|matikan eqo|matikan band)/;
+  const stepKw = /(langkah|steps|jalan|walk|lacak|lari)/;
+  const startKw = /(mulai|start|aktifkan|hidupkan|jalankan|begin|buka tracking)/;
+  const stopKw = /(berhenti|stop|hentikan|pause|nonaktifkan|matikan tracking|stop tracking|selesai)/;
+  const powerKw = /(power off|shutdown|shut down|disconnect|putuskan|matikan gelang|matikan eqo|matikan band|putus koneksi)/;
   const volumeMatch =
     q.match(/(?:volume|suara|sound)[^0-9]*(\d{1,3})/) ||
     q.match(/(?:set|atur|ubah)[^0-9]*volume[^0-9]*(\d{1,3})/);
@@ -114,13 +114,13 @@ function detectIntent(raw: string): Intent {
   if (startKw.test(q) && (stepKw.test(q) || /tracking/.test(q)))
     return { kind: "start_track" };
   if (/tracking/.test(q) && startKw.test(q)) return { kind: "start_track" };
-  if (/(open|buka).*(goal|target)/.test(q) || /^goals?$|^target/.test(q))
+  if (/(open|buka|lihat).*(goal|target)/.test(q) || /^goals?$|^target/.test(q))
     return { kind: "open", tab: "goals" };
-  if (/(open|buka).*(setting|pengaturan)/.test(q))
+  if (/(open|buka|lihat).*(setting|pengaturan|opsi)/.test(q))
     return { kind: "open", tab: "settings" };
-  if (/(open|buka).*(device|gelang|band)/.test(q))
+  if (/(open|buka|lihat).*(device|gelang|band|perangkat)/.test(q))
     return { kind: "open", tab: "device" };
-  if (/(heart|denyut|nadi|bpm|pulse)/.test(q))
+  if (/(heart|denyut|nadi|bpm|pulse|detak)/.test(q))
     return { kind: "open", tab: "health" };
   return null;
 }
@@ -137,7 +137,7 @@ export default function Index() {
 function IndexInner() {
   const { C, styles, theme, setTheme } = useAppTheme();
   const [tab, setTab] = useState<Tab>("health");
-  const [lang, setLangState] = useState<Lang>("en");
+  const [lang, setLangState] = useState<Lang>("id");
   const [prefsLoaded, setPrefsLoaded] = useState(true);
 
   // Device & Application States
@@ -215,7 +215,7 @@ function IndexInner() {
   useEffect(() => {
     (async () => {
       try {
-        const savedLang = (await storage.getItem<string>(K.lang, "en")) as Lang | null;
+        const savedLang = (await storage.getItem<string>(K.lang, "id")) as Lang | null;
         if (savedLang === "en" || savedLang === "id") setLangState(savedLang);
         const v = await storage.getItem<number>(K.volume, 70);
         if (typeof v === "number") setVolume(v);

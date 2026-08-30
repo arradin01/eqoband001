@@ -24,7 +24,13 @@ export async function speak(text: string, volume: number = 0.7, lang: string = "
 
       // Select matching voice if available
       const voices = window.speechSynthesis.getVoices?.() || [];
-      const matchVoice = voices.find((v) => v.lang.startsWith(lang) || v.lang.includes(lang.toUpperCase()));
+      const matchVoice = voices.find(
+        (v) =>
+          v.lang === "id-ID" ||
+          v.lang.startsWith("id") ||
+          v.name.toLowerCase().includes("indonesia") ||
+          v.lang.toLowerCase().includes("id")
+      );
       if (matchVoice) {
         utterance.voice = matchVoice;
       }
