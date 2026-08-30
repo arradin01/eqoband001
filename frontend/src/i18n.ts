@@ -83,6 +83,7 @@ export const T: Record<Lang, Record<string, string>> = {
     listening: "Listening...",
     voice_mode_active: "Voice mode active - speak naturally",
     voice_mode_tap: "Tap the microphone for hands-free mode",
+    voice_mode_tap_hint: "Tap once on touch sensor (or Stop & Send) when done speaking",
     thinking: "Thinking...",
     ai_greeting: "Hi! I'm EQO AI, your EQOBand smart assistant. Ask me anything - health, fitness, or a general chat!",
     // device
@@ -261,6 +262,7 @@ export const T: Record<Lang, Record<string, string>> = {
     listening: "Mendengarkan...",
     voice_mode_active: "Mode suara aktif - bicara natural",
     voice_mode_tap: "Ketuk mikrofon untuk mode hands-free",
+    voice_mode_tap_hint: "Ketuk sekali pada sensor (atau Stop & Kirim) setelah selesai bicara",
     thinking: "Berpikir...",
     ai_greeting: "Halo! Saya EQO AI, asisten cerdas EQOBand kamu. Tanya apa saja - kesehatan, kebugaran, atau obrolan santai!",
     hold_connect: "TAHAN 2D - HUBUNGKAN",

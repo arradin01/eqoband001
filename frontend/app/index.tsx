@@ -439,7 +439,7 @@ function IndexInner() {
     setListening(true);
     setVoiceProcessing(false);
     try {
-      const session = await startAudioRecording();
+      const session = await startAudioRecording(lang);
       recSessionRef.current = session;
       showToast(tr(lang, "speaking_now"));
     } catch (err) {
@@ -744,6 +744,7 @@ function IndexInner() {
         t={t}
         connected={connected}
         onReconnect={doConnect}
+        onGesture={handleGestureEvent}
       />
 
       {/* Floating Active Tracking Banner */}
@@ -956,11 +957,13 @@ function StateBanner({
   t,
   connected,
   onReconnect,
+  onGesture,
 }: {
   appState: AppStateMode;
   t: (k: string) => string;
   connected: boolean;
   onReconnect: () => void;
+  onGesture?: (code: GestureCode, source: "simulated") => void;
 }) {
   const { C, styles } = useAppTheme();
 
@@ -1020,26 +1023,55 @@ function StateBanner({
       testID="state-banner"
       style={[
         styles.stateBanner,
-        { backgroundColor: config.bg, borderColor: config.border },
+        { backgroundColor: config.bg, borderColor: config.border, flexDirection: "column", alignItems: "stretch", gap: 8 },
       ]}
     >
-      <Icon name={config.icon} color={config.color} size={20} />
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.stateText, { color: config.color }]}>
-          {config.label}
-        </Text>
-        <Text style={styles.stateSub}>{config.sub}</Text>
-      </View>
-      {!connected && (
-        <Pressable
-          testID="state-reconnect-btn"
-          onPress={onReconnect}
-          style={[styles.outline, { borderColor: C.red, paddingVertical: 4, paddingHorizontal: 10 }]}
-        >
-          <Text style={[styles.action, { color: C.red, fontSize: 11 }]}>
-            {t("reconnect")}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <Icon name={config.icon} color={config.color} size={20} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.stateText, { color: config.color }]}>
+            {config.label}
           </Text>
-        </Pressable>
+          <Text style={styles.stateSub}>{config.sub}</Text>
+        </View>
+        {!connected && (
+          <Pressable
+            testID="state-reconnect-btn"
+            onPress={onReconnect}
+            style={[styles.outline, { borderColor: C.red, paddingVertical: 4, paddingHorizontal: 10 }]}
+          >
+            <Text style={[styles.action, { color: C.red, fontSize: 11 }]}>
+              {t("reconnect")}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Quick Gesture bar on top */}
+      {onGesture && (
+        <View style={{ flexDirection: "row", gap: 6, paddingTop: 4, borderTopWidth: 1, borderTopColor: "rgba(155,161,176,0.15)" }}>
+          <Pressable
+            testID="quick-single-tap"
+            onPress={() => onGesture(1, "simulated")}
+            style={{ flex: 1, backgroundColor: C.raised, borderRadius: 8, paddingVertical: 6, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ fontSize: 10, color: C.text, fontWeight: "700" }}>👆 1: {t("single_tap")}</Text>
+          </Pressable>
+          <Pressable
+            testID="quick-double-tap"
+            onPress={() => onGesture(2, "simulated")}
+            style={{ flex: 1, backgroundColor: C.raised, borderRadius: 8, paddingVertical: 6, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ fontSize: 10, color: C.text, fontWeight: "700" }}>✌️ 2: {t("double_tap")}</Text>
+          </Pressable>
+          <Pressable
+            testID="quick-long-press"
+            onPress={() => onGesture(3, "simulated")}
+            style={{ flex: 1, backgroundColor: C.raised, borderRadius: 8, paddingVertical: 6, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ fontSize: 10, color: C.text, fontWeight: "700" }}>⏱️ 3: {t("long_press")}</Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );
@@ -1141,6 +1173,10 @@ function VoiceAssistantOverlay({
           )}
         </Pressable>
       </View>
+
+      <Text style={[styles.muted, { fontSize: 10, textAlign: "center", marginTop: 8 }]}>
+        {t("voice_mode_tap_hint")}
+      </Text>
     </View>
   );
 }
