@@ -65,6 +65,12 @@ EQOband is a companion mobile app for a wearable wristband (Seeed Studio XIAO ES
 ## Persistence
 - Language, volume, notifications, talkback, and custom step/active/calorie goals stored via `@/src/utils/storage` (AsyncStorage-backed).
 
+## Recent Implementations (Auto-Connect & BLE Sync)
+- Auto-Connect & Auto-Reconnect: Ketika BLE ESP32-C3 terdeteksi dalam jangkauan atau aplikasi dibuka, aplikasi otomatis terhubung ke EQOband tanpa perlu menahan hold tombol 2 detik secara manual.
+- Remember Last Paired Device: ID & Nama perangkat ESP32 tersimpan di `AsyncStorage` (`eqo:lastBleDevice`), dengan opsi "Lupakan Perangkat" / "Forget Device" di Tab Gelang.
+- Direct Connect Pill: Status pill di Tab Kesehatan ("Tidak Terhubung") kini bisa langsung di-tap untuk melakukan koneksi instan ke gelang.
+- Seamless BLE State Machine Sync: Koneksi BLE langsung mengaktifkan BPM streaming, status IDLE, battery readout, serta stream gesture TTP223 ke seluruh aplikasi.
+
 ## Future Work
 - Wire real BLE (`react-native-ble-plx`) once ESP32-C3 firmware exposes service/characteristic UUIDs.
 - Native voice pipeline (STT + TTS) once a direct OpenAI key is provided (current key routed via emergent integrations).

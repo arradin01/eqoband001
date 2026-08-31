@@ -66,6 +66,8 @@ const K = {
   activeGoal: "eqo:activeGoal",
   calGoal: "eqo:calGoal",
   sessions: "eqo:sessions",
+  lastBleDevice: "eqo:lastBleDevice",
+  autoConnectEnabled: "eqo:autoConnectEnabled",
 };
 
 const Icon = ({
@@ -167,6 +169,10 @@ function IndexInner() {
   const [realBleInfo, setRealBleInfo] = useState<ConnectedInfo | null>(null);
   const [realBpm, setRealBpm] = useState<number | null>(null);
 
+  // Auto-Connect & Remembered BLE Device State
+  const [lastBleDevice, setLastBleDevice] = useState<{ id: string; name: string | null } | null>(null);
+  const [autoConnectEnabled, setAutoConnectEnabled] = useState(true);
+
   // Gesture Event Log
   const [lastGesture, setLastGesture] = useState<{
     code: number;
@@ -232,6 +238,17 @@ function IndexInner() {
 
         const sess = await storage.getItem<SavedTrackingSession[]>(K.sessions, []);
         if (Array.isArray(sess)) setSavedSessions(sess);
+
+        const savedLastDev = await storage.getItem<{ id: string; name: string | null } | null>(
+          K.lastBleDevice,
+          null
+        );
+        if (savedLastDev && typeof savedLastDev === "object" && savedLastDev.id) {
+          setLastBleDevice(savedLastDev);
+        }
+
+        const savedAutoConn = await storage.getItem<boolean>(K.autoConnectEnabled, true);
+        if (typeof savedAutoConn === "boolean") setAutoConnectEnabled(savedAutoConn);
       } catch (e) {
         console.warn("Error reading stored prefs:", e);
       } finally {
@@ -315,9 +332,54 @@ function IndexInner() {
       setConnecting(false);
       setBpm(72);
       setBattery(86);
-      showToast(tr(lang, "toast_connected"));
-    }, 400);
+      showToast(lang === "id" ? "Terhubung ke EQOband" : "Connected to EQOband");
+    }, 100);
   }, [lang, showToast]);
+
+  // Handler when Real BLE connects -> Auto-connect the whole EQOband application state
+  const handleRealBleConnected = useCallback(
+    async (info: ConnectedInfo | null) => {
+      setRealBleInfo(info);
+      if (info) {
+        // Automatically sync EQOband application state
+        setConnected(true);
+        setBpm(75);
+        setBattery(92);
+        const deviceData = { id: info.id, name: info.name ?? "EQOband ESP32" };
+        setLastBleDevice(deviceData);
+        await storage.setItem(K.lastBleDevice, deviceData);
+        showToast(`${tr(lang, "toast_connected")} (${info.name ?? info.id})`);
+      } else {
+        // Disconnected from BLE
+        setConnected(false);
+        setRealBpm(null);
+      }
+    },
+    [lang, showToast]
+  );
+
+  const handleForgetDevice = useCallback(async () => {
+    setLastBleDevice(null);
+    await storage.removeItem(K.lastBleDevice);
+    showToast(lang === "id" ? "Perangkat terakhir dilupakan" : "Last paired device removed");
+  }, [lang, showToast]);
+
+  const handleToggleAutoConnect = useCallback(
+    async (val: boolean) => {
+      setAutoConnectEnabled(val);
+      await storage.setItem(K.autoConnectEnabled, val);
+      showToast(
+        val
+          ? lang === "id"
+            ? "Auto-connect diaktifkan"
+            : "Auto-connect enabled"
+          : lang === "id"
+          ? "Auto-connect dinonaktifkan"
+          : "Auto-connect disabled"
+      );
+    },
+    [lang, showToast]
+  );
 
   const doDisconnect = useCallback(() => {
     setConnected(false);
@@ -784,7 +846,10 @@ function IndexInner() {
             goalsPct={goalsPct}
             appState={appState}
             onGesture={handleGestureEvent}
-            onGoDevice={() => setTab("device")}
+            onGoDevice={() => {
+              if (!connected) doConnect();
+              else setTab("device");
+            }}
             onCardTap={(cardTab: Tab) => {
               if (!connected) {
                 showToast(t("toast_connect_first"));
@@ -849,6 +914,8 @@ function IndexInner() {
             holdProgress={holdProgress}
             startHold={startHold}
             cancelHold={cancelHold}
+            doConnect={doConnect}
+            doDisconnect={doDisconnect}
             toggleTracking={toggleTracking}
             lastGesture={lastGesture}
             onGesture={handleGestureEvent}
@@ -856,7 +923,11 @@ function IndexInner() {
             realBleConnected={!!realBleInfo}
             realBleName={realBleInfo?.name ?? null}
             onRealBpm={setRealBpm}
-            onRealConnect={setRealBleInfo}
+            onRealConnect={handleRealBleConnected}
+            lastBleDevice={lastBleDevice}
+            autoConnectEnabled={autoConnectEnabled}
+            onToggleAutoConnect={handleToggleAutoConnect}
+            onForgetDevice={handleForgetDevice}
           />
         )}
         {tab === "settings" && (
@@ -1175,7 +1246,7 @@ function HealthScreen({
               { color: connected ? C.green : C.red },
             ]}
           >
-            {connected ? t("connected") : t("disconnected")}
+            {connected ? (lang === "id" ? "Terhubung" : "Connected") : (lang === "id" ? "Tidak Terhubung" : "Disconnected")}
           </Text>
         </Pressable>
       </View>
@@ -1627,6 +1698,8 @@ function DeviceScreen({
   holdProgress,
   startHold,
   cancelHold,
+  doConnect,
+  doDisconnect,
   toggleTracking,
   lastGesture,
   onGesture,
@@ -1635,6 +1708,10 @@ function DeviceScreen({
   realBleName,
   onRealBpm,
   onRealConnect,
+  lastBleDevice,
+  autoConnectEnabled,
+  onToggleAutoConnect,
+  onForgetDevice,
 }: any) {
   const { C, styles } = useAppTheme();
   const progressWidth = holdProgress.interpolate({
@@ -1729,15 +1806,66 @@ function DeviceScreen({
         </Text>
         <Pressable
           testID="device-reconnect"
-          onPress={connected ? cancelHold : undefined}
+          onPress={connected ? doDisconnect : doConnect}
           style={styles.quickBtn}
-          onPressIn={connected ? undefined : startHold}
-          onPressOut={connected ? undefined : cancelHold}
         >
           <Text style={styles.quickBtnTxt}>
             {connected ? t("disconnect") : t("reconnect")}
           </Text>
         </Pressable>
+      </View>
+
+      {/* Auto Connect & Paired Device Settings Card */}
+      <View style={styles.infoBox} testID="auto-connect-card">
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+            <Icon name="sync-circle" color={C.ember} size={22} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>{t("auto_connect_title")}</Text>
+              <Text style={styles.muted}>{t("auto_connect_desc")}</Text>
+            </View>
+          </View>
+          <Switch
+            testID="auto-connect-switch"
+            value={autoConnectEnabled}
+            onValueChange={onToggleAutoConnect}
+            thumbColor={autoConnectEnabled ? C.ember : (Platform.OS === "android" ? "#f4f3f4" : "#ffffff")}
+            trackColor={{ false: "#767577", true: "rgba(235,94,40,0.5)" }}
+          />
+        </View>
+
+        {lastBleDevice && (
+          <View
+            style={{
+              marginTop: 12,
+              paddingTop: 12,
+              borderTopWidth: 1,
+              borderTopColor: C.border,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, color: C.muted, fontWeight: "700" }}>
+                {t("last_device")}
+              </Text>
+              <Text style={[styles.body, { fontWeight: "600", marginTop: 2 }]}>
+                {lastBleDevice.name ?? "EQOband ESP32"}
+              </Text>
+              <Text style={[styles.muted, { fontSize: 11 }]}>{lastBleDevice.id}</Text>
+            </View>
+            <Pressable
+              testID="forget-device-btn"
+              onPress={onForgetDevice}
+              style={[styles.outline, { borderColor: C.red, paddingVertical: 4, paddingHorizontal: 8 }]}
+            >
+              <Text style={[styles.action, { color: C.red, fontSize: 11 }]}>
+                {t("forget_device")}
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {/* Tracking control */}
@@ -1820,6 +1948,8 @@ function DeviceScreen({
         onBpmStream={onRealBpm}
         onConnectChange={onRealConnect}
         onGestureStream={(code: GestureCode) => onGesture(code, "ble")}
+        autoConnectEnabled={autoConnectEnabled}
+        lastBleDevice={lastBleDevice}
       />
     </>
   );
@@ -1831,11 +1961,15 @@ function RealBLEPanel({
   onBpmStream,
   onConnectChange,
   onGestureStream,
+  autoConnectEnabled,
+  lastBleDevice,
 }: {
   t: (k: string) => string;
   onBpmStream: (bpm: number | null) => void;
   onConnectChange: (info: ConnectedInfo | null) => void;
   onGestureStream: (gesture: GestureCode) => void;
+  autoConnectEnabled: boolean;
+  lastBleDevice: { id: string; name: string | null } | null;
 }) {
   const { C, styles } = useAppTheme();
   const [scanning, setScanning] = useState(false);
@@ -1846,6 +1980,9 @@ function RealBLEPanel({
   const stopRef = useRef<null | (() => void)>(null);
   const hrStopRef = useRef<null | (() => void)>(null);
   const gestureStopRef = useRef<null | (() => void)>(null);
+
+  const autoConnectAttemptedRef = useRef(false);
+  const isConnectingRef = useRef(false);
 
   useEffect(
     () => () => {
@@ -1860,45 +1997,8 @@ function RealBLEPanel({
     []
   );
 
-  const startScan = async () => {
-    setError(null);
-    setDevices([]);
-    if (!ble.supported) {
-      setError(ble.reason ?? t("beta_unsupported"));
-      return;
-    }
-    const ok = await ble.ensurePermissions();
-    if (!ok) {
-      setError(t("perm_denied"));
-      return;
-    }
-    setScanning(true);
-    stopRef.current = ble.scan(
-      (d) => setDevices((list) => [...list, d]),
-      (msg) => {
-        setError(msg);
-        setScanning(false);
-      }
-    );
-    setTimeout(() => {
-      if (stopRef.current) {
-        stopRef.current();
-        stopRef.current = null;
-      }
-      setScanning(false);
-    }, 15000);
-  };
-
-  const stopScan = () => {
-    if (stopRef.current) {
-      stopRef.current();
-      stopRef.current = null;
-    }
-    setScanning(false);
-  };
-
   const handleConnect = async (d: ScannedDevice) => {
-    if (busyId) return;
+    if (busyId || isConnectingRef.current) return;
     if (connected?.id === d.id) {
       setBusyId(d.id);
       try {
@@ -1939,6 +2039,7 @@ function RealBLEPanel({
     }
     stopScan();
     setBusyId(d.id);
+    isConnectingRef.current = true;
     setError(null);
     try {
       const info = await ble.connect(d.id);
@@ -1960,8 +2061,76 @@ function RealBLEPanel({
       setError(e?.message ?? "Connect failed");
     } finally {
       setBusyId(null);
+      isConnectingRef.current = false;
     }
   };
+
+  const startScan = async () => {
+    setError(null);
+    setDevices([]);
+    if (!ble.supported) {
+      setError(ble.reason ?? t("beta_unsupported"));
+      return;
+    }
+    const ok = await ble.ensurePermissions();
+    if (!ok) {
+      setError(t("perm_denied"));
+      return;
+    }
+    setScanning(true);
+    stopRef.current = ble.scan(
+      (d) => {
+        setDevices((list) => {
+          if (list.some((x) => x.id === d.id)) return list;
+          return [...list, d];
+        });
+
+        // AUTO-CONNECT & AUTO-RECONNECT LOGIC:
+        // 1. If autoConnect is enabled AND we are not currently connected / connecting:
+        // 2. If lastBleDevice is remembered and matches this device ID -> Auto connect immediately!
+        // 3. Or if no last device but name starts with EQOband / ESP32 / XIAO -> Auto connect!
+        if (autoConnectEnabled && !connected && !isConnectingRef.current && !busyId) {
+          const isRemembered = lastBleDevice && lastBleDevice.id === d.id;
+          const devName = (d.name || "").toLowerCase();
+          const isMatchingName =
+            !lastBleDevice &&
+            (devName.includes("eqo") || devName.includes("esp32") || devName.includes("xiao"));
+
+          if (isRemembered || isMatchingName) {
+            handleConnect(d);
+          }
+        }
+      },
+      (msg) => {
+        setError(msg);
+        setScanning(false);
+      }
+    );
+    setTimeout(() => {
+      if (stopRef.current) {
+        stopRef.current();
+        stopRef.current = null;
+      }
+      setScanning(false);
+    }, 15000);
+  };
+
+  const stopScan = () => {
+    if (stopRef.current) {
+      stopRef.current();
+      stopRef.current = null;
+    }
+    setScanning(false);
+  };
+
+  // Auto-scan on mount if auto-connect enabled and BLE supported
+  useEffect(() => {
+    if (autoConnectEnabled && ble.supported && !connected && !autoConnectAttemptedRef.current) {
+      autoConnectAttemptedRef.current = true;
+      startScan().catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoConnectEnabled, ble.supported]);
 
   return (
     <>

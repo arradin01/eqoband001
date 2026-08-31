@@ -188,6 +188,10 @@ export const T: Record<Lang, Record<string, string>> = {
     connected_to: "Connected to",
     services_found: "Services",
     firmware_hint: "Flash /frontend/assets/eqoband_firmware.ino to your XIAO ESP32-C3 with a MAX30102 wired to GPIO 6/7 to stream live BPM.",
+    auto_connect_title: "Auto-Connect & Auto-Reconnect",
+    auto_connect_desc: "Automatically sync EQOband when BLE ESP32 is nearby",
+    last_device: "Last Paired Device",
+    forget_device: "Forget Device",
   },
   id: {
     live: "AKTIF",
@@ -363,6 +367,10 @@ export const T: Record<Lang, Record<string, string>> = {
     connected_to: "Tersambung ke",
     services_found: "Servis",
     firmware_hint: "Flash file /frontend/assets/eqoband_firmware.ino ke XIAO ESP32-C3 dengan MAX30102 di GPIO 6/7 untuk streaming BPM langsung.",
+    auto_connect_title: "Otomatis Konek & Sambung Ulang",
+    auto_connect_desc: "Otomatis sinkron EQOband saat BLE ESP32 berada di dekat aplikasi",
+    last_device: "Perangkat Terakhir Terhubung",
+    forget_device: "Lupakan Perangkat",
   },
 };
 
